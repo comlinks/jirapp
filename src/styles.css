@@ -1,0 +1,147 @@
+:root {
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color-scheme: light dark;
+  /* 背景色は変数として持ち、フッター(.actions)のグラデもこれに追従させる。
+     未定義だとフッターが常に明るい色で白帯になり、ボタン・メッセージが埋もれる。 */
+  --bg: #f5f6f8;
+  color: #1f2430;
+  background-color: var(--bg);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1b1d23;
+    color: #e6e8ee;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+#app {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+h1 {
+  font-size: 1.4rem;
+  margin: 0 0 4px;
+}
+
+.subtitle {
+  margin: 0 0 24px;
+  opacity: 0.7;
+  font-size: 0.85rem;
+}
+
+.field {
+  margin-bottom: 18px;
+}
+
+.field > label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.field .hint {
+  font-weight: 400;
+  opacity: 0.6;
+  font-size: 0.8rem;
+  margin-left: 6px;
+}
+
+input[type="text"],
+input[type="number"],
+textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, currentColor 4%, transparent);
+  color: inherit;
+  font-family: inherit;
+  font-size: 0.9rem;
+}
+
+textarea {
+  font-family: "Cascadia Code", "Consolas", monospace;
+  min-height: 120px;
+  resize: vertical;
+}
+
+.row {
+  display: flex;
+  gap: 16px;
+}
+
+.row .field {
+  flex: 1;
+}
+
+.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.checkbox input {
+  width: auto;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 24px;
+  position: sticky;
+  bottom: 0;
+  padding: 16px 0;
+  background: linear-gradient(to top, var(--bg, #f5f6f8) 70%, transparent);
+}
+
+button {
+  padding: 9px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  background: #4361ee;
+  color: #fff;
+  transition: filter 0.15s;
+}
+
+button:hover {
+  filter: brightness(1.08);
+}
+
+button.secondary {
+  /* --bg ベースの不透明色＋枠線で、フッターのグラデ上でも常に視認できるようにする。 */
+  background: color-mix(in srgb, currentColor 14%, var(--bg));
+  color: inherit;
+  border: 1px solid color-mix(in srgb, currentColor 32%, transparent);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.status {
+  font-size: 0.85rem;
+  opacity: 0.9;
+}
+
+.status.error {
+  color: #e5484d;
+  opacity: 1;
+}
