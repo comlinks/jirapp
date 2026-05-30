@@ -11,6 +11,20 @@ use settings::Settings;
 /// メモリ上の設定状態。store と同期させる single source of truth のキャッシュ。
 pub struct AppState(pub Mutex<Settings>);
 
+impl AppState {
+    /// 現在の設定のスナップショットを取得する。
+    /// ロックがポイズニングしていても回復して読み出す（1 箇所の panic で
+    /// 設定系コマンド全体が連鎖 panic するのを防ぐ）。
+    pub fn snapshot(&self) -> Settings {
+        self.0.lock().unwrap_or_else(|e| e.into_inner()).clone()
+    }
+
+    /// 設定を置き換える（ポイズニング回復つき）。
+    pub fn replace(&self, settings: Settings) {
+        *self.0.lock().unwrap_or_else(|e| e.into_inner()) = settings;
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // セッション独立: WebView2 のユーザーデータフォルダをアプリ専用パスに固定する。
@@ -62,17 +76,11 @@ pub fn run() {
             //  - URL 未設定 → 設定ウィンドウを表示（ユーザーに URL を入力させる）。
             //  - URL 設定済み → 保存済み設定で Jira を自動オープン（設定ウィンドウは非表示のまま）。
             if initial.jira_url.trim().is_empty() {
-                if let Some(main) = handle.get_webview_window("main") {
-                    let _ = main.show();
-                    let _ = main.set_focus();
-                }
+                commands::show_main(&handle);
             } else if let Err(e) = jira::build_jira_window(&handle, &initial) {
                 // 自動オープンに失敗（URL 不正など）したら設定ウィンドウを出して修正させる。
                 eprintln!("[jirapp] Jira 自動オープンに失敗: {e}. 設定ウィンドウを表示します");
-                if let Some(main) = handle.get_webview_window("main") {
-                    let _ = main.show();
-                    let _ = main.set_focus();
-                }
+                commands::show_main(&handle);
             }
 
             Ok(())

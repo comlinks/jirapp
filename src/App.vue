@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from "vue";
-import { listen } from "@tauri-apps/api/event";
+import { onMounted, onUnmounted, reactive, ref } from "vue";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { Settings } from "./types";
 import {
   applyToJiraWindow,
@@ -26,10 +26,23 @@ const status = ref("");
 const isError = ref(false);
 // Jira ウィンドウが開いているか。開いていれば主ボタンは「設定を閉じる」になる。
 const jiraOpen = ref(false);
+// settings:refresh リスナーの解除関数（アンマウント時に多重登録/リークを防ぐ）。
+let unlisten: UnlistenFn | null = null;
 
 function setStatus(msg: string, error = false) {
   status.value = msg;
   isError.value = error;
+}
+
+// 数値フィールドが空/非数値のまま保存されると Rust 側（u64）でデシリアライズに失敗するため、
+// 保存前に整数へ丸め、最小値 5 を下回らないようにする。
+function sanitizeNumbers() {
+  const fix = (v: unknown) => {
+    const n = Math.floor(Number(v));
+    return Number.isFinite(n) && n >= 5 ? n : 5;
+  };
+  settings.idleThresholdSecs = fix(settings.idleThresholdSecs);
+  settings.reloadCheckIntervalSecs = fix(settings.reloadCheckIntervalSecs);
 }
 
 async function refreshJiraOpen() {
@@ -50,18 +63,29 @@ onMounted(async () => {
   }
   await refreshJiraOpen();
   // Rust 側（メニューからの再表示・Jira クローズ）からの状態更新通知でボタン表示を追従させる。
-  await listen("settings:refresh", () => {
+  unlisten = await listen("settings:refresh", () => {
     setStatus("");
     refreshJiraOpen();
   });
 });
 
+onUnmounted(() => {
+  unlisten?.();
+  unlisten = null;
+});
+
 async function save() {
   busy.value = true;
   try {
+    sanitizeNumbers();
     await saveSettings({ ...settings });
     await applyToJiraWindow();
-    setStatus("保存しました（Jira ウィンドウへ適用済み）");
+    // Jira が開いている時だけライブ適用が起きる。さらに JS は再注入されない（再オープンで反映）。
+    setStatus(
+      jiraOpen.value
+        ? "保存しました（CSS・設定を反映。JS の変更は Jira を開き直すと反映されます）"
+        : "保存しました",
+    );
   } catch (e) {
     setStatus(`保存に失敗: ${e}`, true);
   } finally {
@@ -72,6 +96,7 @@ async function save() {
 async function openJira() {
   busy.value = true;
   try {
+    sanitizeNumbers();
     await saveSettings({ ...settings });
     await openJiraWindow();
     jiraOpen.value = true;
@@ -106,7 +131,7 @@ async function closeSettings() {
       <div class="field">
         <label for="jiraUrl">
           Jira URL
-          <span class="hint">例: https://your-domain.atlassian.net</span>
+          <span class="hint">https の *.atlassian.net のみ（例: https://your-domain.atlassian.net）</span>
         </label>
         <input
           id="jiraUrl"
@@ -171,7 +196,7 @@ async function closeSettings() {
       <div class="field">
         <label for="js">
           注入する JS
-          <span class="hint">各ページロード後に実行</span>
+          <span class="hint">各ページロード後に実行（変更は Jira を開き直すと反映）</span>
         </label>
         <textarea
           id="js"

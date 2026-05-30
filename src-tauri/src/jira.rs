@@ -3,7 +3,7 @@ use tauri::{
     AppHandle, Emitter, Manager, Runtime, WebviewUrl, WebviewWindowBuilder, WindowEvent,
 };
 
-use crate::settings::Settings;
+use crate::settings::{self, Settings};
 use crate::AppState;
 
 /// Jira ウィンドウのラベル。
@@ -23,12 +23,8 @@ pub const JIRA_LABEL: &str = "jira";
 /// そこで実際の生成は `run_on_main_thread` でイベントループ上にスケジュールし、
 /// 呼び出し元（async コマンド）はワーカースレッドで結果を待つ。
 pub fn open<R: Runtime>(app: &AppHandle<R>, s: &Settings) -> Result<(), String> {
-    let url = s.jira_url.trim();
-    if url.is_empty() {
-        return Err("Jira URL が設定されていません".into());
-    }
-    // URL の検証はここ（呼び出し元スレッド）で済ませ、不正なら即座に返す。
-    tauri::Url::parse(url).map_err(|e| format!("Jira URL が不正です: {e}"))?;
+    // URL の検証（空・スキーム・ホスト）はここ（呼び出し元スレッド）で済ませ、不正なら即座に返す。
+    settings::require_jira_url(&s.jira_url)?;
 
     // 既存ウィンドウがあればフォーカス＋ライブ適用のみ。
     if let Some(win) = app.get_webview_window(JIRA_LABEL) {
@@ -56,9 +52,8 @@ pub fn open<R: Runtime>(app: &AppHandle<R>, s: &Settings) -> Result<(), String> 
 /// 実際の Jira ウィンドウ生成。必ずメインスレッド上で呼ぶこと。
 /// 起動時の自動オープン（lib.rs の setup）からも直接呼ぶため crate 公開。
 pub(crate) fn build_jira_window<R: Runtime>(app: &AppHandle<R>, s: &Settings) -> Result<(), String> {
-    // 呼び出し前に検証済みだが、メインスレッドのクロージャ内で再パースする。
-    let parsed = tauri::Url::parse(s.jira_url.trim())
-        .map_err(|e| format!("Jira URL が不正です: {e}"))?;
+    // 呼び出し前に検証済みのこともあるが、生成スレッド上でも同じ検証を通して Url を得る。
+    let parsed = settings::require_jira_url(&s.jira_url)?;
 
     let mut builder = WebviewWindowBuilder::new(app, JIRA_LABEL, WebviewUrl::External(parsed))
         .title("Jira")
@@ -89,7 +84,7 @@ pub(crate) fn build_jira_window<R: Runtime>(app: &AppHandle<R>, s: &Settings) ->
             return;
         }
         if let Some(state) = app_for_load.try_state::<AppState>() {
-            let current = state.0.lock().map(|g| g.clone()).unwrap_or_default();
+            let current = state.snapshot();
             let _ = webview.eval(&push_config_script(&current));
         }
     });

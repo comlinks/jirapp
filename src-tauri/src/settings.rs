@@ -32,6 +32,44 @@ impl Default for Settings {
     }
 }
 
+/// Jira URL の検証を一箇所に集約する。
+///
+/// セッション独立の SSB としての信頼境界を守るため、設定する URL は
+/// **https かつ `*.atlassian.net`** に限定する（非 HTTPS の MITM や、
+/// Jira ブラウザの体裁で攻撃者ページを開かせるのを防ぐ）。SSO 中の
+/// `id.atlassian.com` 等への遷移は webview のナビゲーションで起きるもので、
+/// 設定値の検証対象ではない。
+fn check_https_atlassian(url: &tauri::Url) -> Result<(), String> {
+    if url.scheme() != "https" {
+        return Err("Jira URL は https である必要があります".into());
+    }
+    match url.host_str() {
+        Some(h) if h == "atlassian.net" || h.ends_with(".atlassian.net") => Ok(()),
+        _ => Err("Jira URL のホストは *.atlassian.net である必要があります".into()),
+    }
+}
+
+/// 保存時の検証。空（未設定）は許可し、入力があれば https + `*.atlassian.net` を要求する。
+pub fn validate_jira_url(raw: &str) -> Result<(), String> {
+    let t = raw.trim();
+    if t.is_empty() {
+        return Ok(());
+    }
+    let url = tauri::Url::parse(t).map_err(|e| format!("Jira URL が不正です: {e}"))?;
+    check_https_atlassian(&url)
+}
+
+/// オープン時の解決。空はエラー。https + `*.atlassian.net` を満たした `Url` を返す。
+pub fn require_jira_url(raw: &str) -> Result<tauri::Url, String> {
+    let t = raw.trim();
+    if t.is_empty() {
+        return Err("Jira URL が設定されていません".into());
+    }
+    let url = tauri::Url::parse(t).map_err(|e| format!("Jira URL が不正です: {e}"))?;
+    check_https_atlassian(&url)?;
+    Ok(url)
+}
+
 /// store 上で設定を保存するキー。
 pub const STORE_PATH: &str = "settings.json";
 pub const SETTINGS_KEY: &str = "settings";

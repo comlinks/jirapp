@@ -7,18 +7,20 @@ use crate::AppState;
 /// 現在の設定を取得する。
 #[tauri::command]
 pub fn get_settings(state: State<'_, AppState>) -> Settings {
-    state.0.lock().unwrap().clone()
+    state.snapshot()
 }
 
 /// 設定を保存する（store へ永続化し、メモリ上の状態も更新）。
+/// Jira URL が入力されている場合は https + `*.atlassian.net` を満たすことを検証する。
 #[tauri::command]
 pub fn save_settings(
     app: AppHandle,
     state: State<'_, AppState>,
     settings: Settings,
 ) -> Result<(), String> {
+    settings::validate_jira_url(&settings.jira_url)?;
     settings::persist_settings(&app, &settings)?;
-    *state.0.lock().unwrap() = settings;
+    state.replace(settings);
     Ok(())
 }
 
@@ -30,8 +32,7 @@ pub fn save_settings(
 /// 白画面化しない（同期コマンドのままだとメインスレッドを塞いで生成が完了しない）。
 #[tauri::command]
 pub async fn open_jira_window(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
-    // MutexGuard は await 境界をまたがないようここで clone してすぐ手放す。
-    let s = state.0.lock().unwrap().clone();
+    let s = state.snapshot();
     jira::open(&app, &s)?;
     // Jira を開いた時点で設定ウィンドウは非表示にする。
     if let Some(main) = app.get_webview_window("main") {
@@ -40,10 +41,11 @@ pub async fn open_jira_window(app: AppHandle, state: State<'_, AppState>) -> Res
     Ok(())
 }
 
-/// 現在設定を開いている Jira ウィンドウへライブ適用する（CSS/JS の再注入・閾値更新）。
+/// 現在設定を開いている Jira ウィンドウへライブ適用する（CSS / アイドル閾値）。
+/// ユーザー JS の変更はウィンドウ再オープン時に反映される（initialization_script のため）。
 #[tauri::command]
 pub fn apply_to_jira_window(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
-    let s = state.0.lock().unwrap().clone();
+    let s = state.snapshot();
     jira::apply(&app, &s)
 }
 
@@ -62,13 +64,18 @@ pub fn is_jira_open(app: AppHandle) -> bool {
     app.get_webview_window(jira::JIRA_LABEL).is_some()
 }
 
-/// 設定ウィンドウを表示してフォーカスし、フロントへ状態更新を通知する。
-/// Jira ウィンドウのメニュー（設定を開く導線）から呼ぶ。
-pub fn reveal_settings<R: Runtime>(app: &AppHandle<R>) {
+/// 設定ウィンドウを表示してフォーカスする（イベント通知はしない）。
+pub fn show_main<R: Runtime>(app: &AppHandle<R>) {
     if let Some(main) = app.get_webview_window("main") {
         let _ = main.show();
         let _ = main.set_focus();
     }
+}
+
+/// 設定ウィンドウを表示し、フロントへ状態更新を通知する。
+/// Jira ウィンドウのシステムメニュー（設定を開く導線）から呼ぶ。
+pub fn reveal_settings<R: Runtime>(app: &AppHandle<R>) {
+    show_main(app);
     // フロントにボタン表示（設定を閉じる）へ切替えさせる。
     let _ = app.emit("settings:refresh", ());
 }
