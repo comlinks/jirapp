@@ -25,3 +25,18 @@ pnpm-debug.log*
 
 # Rust / Tauri
 src-tauri/target
+# tauri-build が capabilities/プラグインから毎ビルド再生成する。追跡しない。
+src-tauri/gen/schemas
+
+# Claude Code のローカル設定（*.local では .local.json にマッチしないため明示）
+.claude/settings.local.json
+
+# Secrets / credentials（安全網: 誤って作業ツリーに置いても追跡しない）
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+secrets.json
