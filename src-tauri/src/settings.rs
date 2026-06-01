@@ -96,3 +96,60 @@ pub fn persist_settings<R: Runtime>(app: &AppHandle<R>, s: &Settings) -> Result<
     store.save().map_err(|e| e.to_string())?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validate_allows_empty() {
+        // 空（未設定）は保存可（起動時に設定ウィンドウを出す分岐に乗る）。
+        assert!(validate_jira_url("").is_ok());
+        assert!(validate_jira_url("   ").is_ok());
+    }
+
+    #[test]
+    fn validate_accepts_https_atlassian() {
+        assert!(validate_jira_url("https://example.atlassian.net").is_ok());
+        // 前後の空白は trim される。
+        assert!(validate_jira_url("  https://example.atlassian.net/jira/boards  ").is_ok());
+        // apex ドメインそのものも許可する。
+        assert!(validate_jira_url("https://atlassian.net").is_ok());
+    }
+
+    #[test]
+    fn validate_rejects_non_https() {
+        assert!(validate_jira_url("http://example.atlassian.net").is_err());
+    }
+
+    #[test]
+    fn validate_rejects_non_atlassian_host() {
+        // 体裁を似せた攻撃者ドメインを弾く（接尾辞の取り違えも含む）。
+        assert!(validate_jira_url("https://example.com").is_err());
+        assert!(validate_jira_url("https://atlassian.net.evil.com").is_err());
+        assert!(validate_jira_url("https://evilatlassian.net").is_err());
+    }
+
+    #[test]
+    fn require_rejects_empty() {
+        // オープン時は未設定をエラーにする。
+        assert!(require_jira_url("").is_err());
+        assert!(require_jira_url("   ").is_err());
+    }
+
+    #[test]
+    fn require_returns_parsed_url() {
+        let url = require_jira_url("https://example.atlassian.net/path").expect("should parse");
+        assert_eq!(url.scheme(), "https");
+        assert_eq!(url.host_str(), Some("example.atlassian.net"));
+    }
+
+    #[test]
+    fn default_settings_are_sane() {
+        let d = Settings::default();
+        assert!(d.jira_url.is_empty());
+        assert!(d.auto_reload_enabled);
+        assert!(d.idle_threshold_secs >= 5);
+        assert!(d.reload_check_interval_secs >= 5);
+    }
+}

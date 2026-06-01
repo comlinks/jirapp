@@ -1,0 +1,45 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/),
+and this project adheres to [Semantic Versioning](https://semver.org/).
+
+## [0.2.0] - 2026-06-01
+
+### Bug Fixes
+
+- **チケットのドラッグが出来ない (#1)**: Tauri がデフォルトで登録する OS レベルの drag-drop ハンドラが、Jira ボードの HTML5 ドラッグ&ドロップ（カード移動など）を横取りして無効化していた。Jira ウィンドウ生成時に `disable_drag_drop_handler()` を呼び、WebView 内のネイティブな D&D を有効化。
+
+### Changed
+
+- **設定画面のボタン刷新 (#2)**: 「Jira を開く / 設定を閉じる」のトグル＋「保存して適用」を、**「保存して閉じる」(primary)** と **「キャンセル」** の 2 ボタンに変更。
+  - 保存して閉じる: 設定を保存し、Jira が開いていれば適用して設定を隠す。未オープンなら保存した設定で Jira を開く。
+  - キャンセル: 未保存の編集を破棄して閉じる（Jira があれば隠す、無ければアプリ終了。設定ウィンドウの ✕ と同じ挙動）。`close_settings_window` コマンドを追加。
+
+### Internal
+
+- **CI（GitHub Actions）**: `npm run build`（vue-tsc 型チェック + Vite ビルド）、`cargo fmt --check`、`cargo clippy -D warnings`、`cargo test`（ユニットテスト）を Windows ランナーで実行。
+- **ユニットテスト**: `settings` の Jira URL 検証（`validate_jira_url` / `require_jira_url`）と既定値の単体テストを追加。
+- **Security Check**: `cargo audit` と `npm audit`（本番依存・critical）を週次 + push/PR で実行。
+- **CodeQL**: GitHub の CodeQL コードスキャン（Default setup）を有効化（リポジトリ設定側で構成。`javascript-typescript` / `rust`）。
+- **Dependabot**: npm / cargo / github-actions を週次更新。サプライチェーン対策に cooldown、Tauri 関連はグループ化。
+- **SECURITY.md**: 脆弱性報告フローと対象スコープを明文化。
+- **Release ワークフロー**: `v*` タグ push で NSIS インストーラをビルドして下書きリリースを作成。バンドル対象を `nsis` に固定（MSI/WiX 依存による失敗を回避）。
+- 既存コードの clippy 指摘（needless borrow 3 件）の解消と rustfmt 整形。
+
+## [0.1.0] - 2026-05-30
+
+Initial release.
+
+### Features
+
+- **Jira 専用ブラウザ** — Jira Cloud（`*.atlassian.net`）を、システムブラウザから独立したセッションで表示する Windows 向け Tauri v2 アプリ。
+- **セッション独立** — WebView2 のユーザーデータフォルダをアプリ専用に固定し、システムの Edge/Chrome とは Cookie・認証を分離。
+- **JS/CSS 注入** — 任意の JS/CSS を WebView に注入（基盤処理はネイティブ注入で CSP の影響を受けにくい構成）。
+- **アイドル時自動リロード** — 最終操作からの経過時間でアイドルを判定し、設定間隔で自動リロード。閾値・チェック間隔は設定可能。
+- **設定の永続化** — `tauri-plugin-store` で設定を保存。Jira ウィンドウの位置・サイズ・最大化は `tauri-plugin-window-state` で復元。
+- **設定導線** — リモートコンテンツに IPC を与えないため、Jira ウィンドウのシステムメニュー（Win32）から設定を開く。
+
+[0.2.0]: https://github.com/comlinks/jirapp/releases/tag/v0.2.0
+[0.1.0]: https://github.com/comlinks/jirapp/releases/tag/v0.1.0

@@ -1,0 +1,49 @@
+name: Release
+
+# v* タグの push で起動し、NSIS インストーラをビルドして
+# GitHub Release（下書き）を作成・アセットを添付する。
+# jirapp は updater プラグインを使わないため署名鍵・updater JSON は不要。
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build & Release
+    permissions:
+      contents: write
+    runs-on: windows-latest
+    steps:
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      # tauri-action が beforeBuildCommand (npm run build) → cargo build → NSIS バンドルを実行し、
+      # 生成物を下書きリリースに添付する。バンドル対象は tauri.conf.json の bundle.targets (nsis)。
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "jirapp ${{ github.ref_name }}"
+          releaseBody: "アセットの NSIS インストーラ (_x64-setup.exe) をダウンロードしてインストールしてください。未署名のため初回起動時に SmartScreen 警告が出ることがあります（詳細情報 → 実行）。"
+          releaseDraft: true
+          prerelease: false

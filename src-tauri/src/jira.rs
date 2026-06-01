@@ -1,7 +1,5 @@
 use tauri::webview::PageLoadEvent;
-use tauri::{
-    AppHandle, Emitter, Manager, Runtime, WebviewUrl, WebviewWindowBuilder, WindowEvent,
-};
+use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 
 use crate::settings::{self, Settings};
 use crate::AppState;
@@ -51,7 +49,10 @@ pub fn open<R: Runtime>(app: &AppHandle<R>, s: &Settings) -> Result<(), String> 
 
 /// 実際の Jira ウィンドウ生成。必ずメインスレッド上で呼ぶこと。
 /// 起動時の自動オープン（lib.rs の setup）からも直接呼ぶため crate 公開。
-pub(crate) fn build_jira_window<R: Runtime>(app: &AppHandle<R>, s: &Settings) -> Result<(), String> {
+pub(crate) fn build_jira_window<R: Runtime>(
+    app: &AppHandle<R>,
+    s: &Settings,
+) -> Result<(), String> {
     // 呼び出し前に検証済みのこともあるが、生成スレッド上でも同じ検証を通して Url を得る。
     let parsed = settings::require_jira_url(&s.jira_url)?;
 
@@ -71,7 +72,7 @@ pub(crate) fn build_jira_window<R: Runtime>(app: &AppHandle<R>, s: &Settings) ->
     // ユーザー JS は別 initialization_script としてネイティブ注入（CSP 非対象）。
     // 構文エラーがあってもこの script 内に閉じ、基盤処理は壊さない。
     if !s.custom_js.trim().is_empty() {
-        builder = builder.initialization_script(&user_js_wrapper(&s.custom_js));
+        builder = builder.initialization_script(user_js_wrapper(&s.custom_js));
     }
 
     // ページロード完了ごとに「現在の」設定（CSS・閾値）を反映する。
@@ -89,11 +90,14 @@ pub(crate) fn build_jira_window<R: Runtime>(app: &AppHandle<R>, s: &Settings) ->
         }
         if let Some(state) = app_for_load.try_state::<AppState>() {
             let current = state.snapshot();
-            let _ = webview.eval(&push_config_script(&current));
+            let _ = webview.eval(push_config_script(&current));
         }
     });
 
-    eprintln!("[jirapp] building jira window for url={}", s.jira_url.trim());
+    eprintln!(
+        "[jirapp] building jira window for url={}",
+        s.jira_url.trim()
+    );
     let window = builder.build().map_err(|e| e.to_string())?;
     eprintln!("[jirapp] jira window built ok");
 
@@ -101,8 +105,8 @@ pub(crate) fn build_jira_window<R: Runtime>(app: &AppHandle<R>, s: &Settings) ->
     // 状態が未保存の初回は何もしない（既定の中央・初期サイズのまま）。
     {
         use tauri_plugin_window_state::{StateFlags, WindowExt};
-        let _ = window
-            .restore_state(StateFlags::POSITION | StateFlags::SIZE | StateFlags::MAXIMIZED);
+        let _ =
+            window.restore_state(StateFlags::POSITION | StateFlags::SIZE | StateFlags::MAXIMIZED);
     }
     let _ = window.show();
 
@@ -179,7 +183,8 @@ mod sysmenu {
         unsafe {
             let hmenu = GetSystemMenu(hwnd, false);
             let _ = AppendMenuW(hmenu, MF_SEPARATOR, 0, PCWSTR::null());
-            if let Err(e) = AppendMenuW(hmenu, MF_STRING, IDM_OPEN_SETTINGS, w!("設定を開く")) {
+            if let Err(e) = AppendMenuW(hmenu, MF_STRING, IDM_OPEN_SETTINGS, w!("設定を開く"))
+            {
                 eprintln!("[jirapp] システムメニュー項目の追加に失敗: {e}");
             }
             if SetWindowSubclass(hwnd, Some(subclass_proc), SUBCLASS_ID, refdata) == false {
@@ -223,7 +228,7 @@ mod sysmenu {
 /// ユーザー JS の変更はウィンドウ再オープン時に反映される。
 pub fn apply<R: Runtime>(app: &AppHandle<R>, s: &Settings) -> Result<(), String> {
     if let Some(win) = app.get_webview_window(JIRA_LABEL) {
-        win.eval(&push_config_script(s)).map_err(|e| e.to_string())?;
+        win.eval(push_config_script(s)).map_err(|e| e.to_string())?;
     }
     Ok(())
 }
