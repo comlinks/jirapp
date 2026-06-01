@@ -112,7 +112,7 @@ WebView2 のユーザーデータフォルダを `lib.rs` 冒頭の環境変数 
   - 重要な Write/Edit は **1 つずつ**実行し、長時間のビルドコマンドと同一バッチに混ぜない（並列バッチで書き込み競合・ファイル破損が起きた実績あり）。
   - ビルド結果はファイルに落として読む（端末出力が時系列で錯綜する）。判断は必ず最新ログで。
   - `tauri dev` のファイル監視は逐次編集の合間に再コンパイルを走らせるため、**途中の一時エラーは無視**してよい。最終ビルド結果で判断する。
-  - dev 停止後に `vite(node)` / `jirapp.exe` が孤児化し **ポート 1420 を掴み続ける**ことがある。`Get-NetTCPConnection -LocalPort 1420` で PID 特定 → **PowerShell の `Stop-Process -Id <PID> -Force`** で倒す（bash の `kill` は Windows ネイティブ PID に効かないことがある）。
+  - dev 停止後に `vite(node)` / `jirapp.exe` が孤児化し **ポート 1430 を掴み続ける**ことがある（dev サーバは Vite `1430` / HMR `1431`。pike 等の既定 `1420` との衝突回避のため変更済み）。`Get-NetTCPConnection -LocalPort 1430` で PID 特定 → **PowerShell の `Stop-Process -Id <PID> -Force`** で倒す（bash の `kill` は Windows ネイティブ PID に効かないことがある）。
 
 ## 動作確認時のチェック
 

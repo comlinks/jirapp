@@ -11,14 +11,15 @@ export default defineConfig(async () => ({
   // Tauri はカスタムスキームで動くため相対パスにする
   clearScreen: false,
   server: {
-    port: 1420,
+    // pike など他の Tauri アプリ（既定 1420）と同時にデバッグしても衝突しないよう変更。
+    port: 1430,
     strictPort: true,
     host: host || false,
     hmr: host
       ? {
           protocol: "ws",
           host,
-          port: 1421,
+          port: 1431,
         }
       : undefined,
     watch: {
