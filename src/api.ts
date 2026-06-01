@@ -26,6 +26,11 @@ export function hideSettingsWindow(): Promise<void> {
   return invoke("hide_settings_window");
 }
 
+/** 設定ウィンドウを閉じる（「キャンセル」導線。Jira があれば隠す、無ければ終了）。 */
+export function closeSettingsWindow(): Promise<void> {
+  return invoke("close_settings_window");
+}
+
 /** Jira ウィンドウが開いているか（ボタン表示の切替に使う）。 */
 export function isJiraOpen(): Promise<boolean> {
   return invoke<boolean>("is_jira_open");

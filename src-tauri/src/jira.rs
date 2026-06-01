@@ -61,6 +61,10 @@ pub(crate) fn build_jira_window<R: Runtime>(app: &AppHandle<R>, s: &Settings) ->
         .inner_size(1280.0, 900.0)
         // 復元した位置・サイズを適用してから表示し、初期位置からのちらつきを防ぐ。
         .visible(false)
+        // OS レベルの drag-drop ハンドラを無効化する。これを有効のままにすると
+        // WebView 内の HTML5 ドラッグ&ドロップ（Jira ボードのカード移動など）が
+        // ネイティブ側に横取りされて動作しない（Windows の WebView2 で必須）。
+        .disable_drag_drop_handler()
         // 基盤処理（アイドル検知・リロード・CSS 適用土台）はネイティブ注入。CSP の影響を受けにくい。
         .initialization_script(MACHINERY_JS);
 

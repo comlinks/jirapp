@@ -58,6 +58,21 @@ pub fn hide_settings_window(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// 設定ウィンドウを閉じる（フロントの「キャンセル」導線から呼ぶ）。
+/// 設定ウィンドウ ✕ と同じ挙動: Jira が開いていれば隠すだけ、無ければアプリ終了。
+#[tauri::command]
+pub fn close_settings_window(app: AppHandle) -> Result<(), String> {
+    if app.get_webview_window(jira::JIRA_LABEL).is_some() {
+        if let Some(main) = app.get_webview_window("main") {
+            main.hide().map_err(|e| e.to_string())?;
+        }
+    } else {
+        // Jira が無ければ最後のウィンドウなのでアプリを終了する。
+        app.exit(0);
+    }
+    Ok(())
+}
+
 /// Jira ウィンドウが開いているか。フロントのボタン表示切替（Jiraを開く⇄設定を閉じる）に使う。
 #[tauri::command]
 pub fn is_jira_open(app: AppHandle) -> bool {

@@ -4,6 +4,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { Settings } from "./types";
 import {
   applyToJiraWindow,
+  closeSettingsWindow,
   getSettings,
   hideSettingsWindow,
   isJiraOpen,
@@ -74,18 +75,20 @@ onUnmounted(() => {
   unlisten = null;
 });
 
-async function save() {
+// 保存して閉じる（primary）。設定を保存し、Jira が開いていれば適用して設定を隠す。
+// Jira が未オープンなら保存した設定で Jira を開く（open_jira_window 側で設定は隠れる）。
+async function saveAndClose() {
   busy.value = true;
   try {
     sanitizeNumbers();
     await saveSettings({ ...settings });
-    await applyToJiraWindow();
-    // Jira が開いている時だけライブ適用が起きる。さらに JS は再注入されない（再オープンで反映）。
-    setStatus(
-      jiraOpen.value
-        ? "保存しました（CSS・設定を反映。JS の変更は Jira を開き直すと反映されます）"
-        : "保存しました",
-    );
+    if (jiraOpen.value) {
+      await applyToJiraWindow();
+      await hideSettingsWindow();
+    } else {
+      await openJiraWindow();
+      jiraOpen.value = true;
+    }
   } catch (e) {
     setStatus(`保存に失敗: ${e}`, true);
   } finally {
@@ -93,27 +96,20 @@ async function save() {
   }
 }
 
-async function openJira() {
+// キャンセル（単に閉じるだけ）。未保存の編集を破棄して閉じる。
+// Jira が開いていれば設定を隠すだけ、無ければアプリを終了する（main ✕ と同じ挙動）。
+async function cancel() {
   busy.value = true;
   try {
-    sanitizeNumbers();
-    await saveSettings({ ...settings });
-    await openJiraWindow();
-    jiraOpen.value = true;
-    setStatus("Jira ウィンドウを開きました");
+    // 保存済みの値へ戻して編集を破棄する（次回表示時に確定値が出るように）。
+    try {
+      Object.assign(settings, await getSettings());
+    } catch {
+      /* 取得失敗時はそのまま閉じる */
+    }
+    await closeSettingsWindow();
   } catch (e) {
-    setStatus(`Jira ウィンドウを開けません: ${e}`, true);
-  } finally {
-    busy.value = false;
-  }
-}
-
-async function closeSettings() {
-  busy.value = true;
-  try {
-    await hideSettingsWindow();
-  } catch (e) {
-    setStatus(`設定を閉じられません: ${e}`, true);
+    setStatus(`閉じられません: ${e}`, true);
   } finally {
     busy.value = false;
   }
@@ -207,14 +203,11 @@ async function closeSettings() {
       </div>
 
       <div class="actions">
-        <button v-if="!jiraOpen" :disabled="busy" @click="openJira">
-          Jira を開く
+        <button :disabled="busy" @click="saveAndClose">
+          保存して閉じる
         </button>
-        <button v-else :disabled="busy" @click="closeSettings">
-          設定を閉じる
-        </button>
-        <button class="secondary" :disabled="busy" @click="save">
-          保存して適用
+        <button class="secondary" :disabled="busy" @click="cancel">
+          キャンセル
         </button>
         <span class="status" :class="{ error: isError }">{{ status }}</span>
       </div>
