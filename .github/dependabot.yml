@@ -26,6 +26,11 @@ updates:
         patterns:
           - "tauri"
           - "tauri-*"
+    ignore:
+      # windows クレートは tauri/tao/wry が使うバージョン(現状 0.61)に揃える必要がある。
+      # 先行して上げると sysmenu.rs の HWND 等の型が二重定義になりビルドが壊れるため、
+      # 自動更新対象から外し、tauri 更新に合わせて手動で追従する。
+      - dependency-name: "windows"
 
   - package-ecosystem: "github-actions"
     directory: "/"
