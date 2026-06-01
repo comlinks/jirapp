@@ -99,6 +99,7 @@ textarea {
 
 .actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   align-items: center;
   margin-top: 24px;
@@ -136,20 +137,34 @@ button:disabled {
   cursor: not-allowed;
 }
 
-.updater {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 8px;
-  padding-top: 16px;
-  border-top: 1px solid color-mix(in srgb, currentColor 12%, transparent);
-}
-
-.updater .version {
+.version {
   font-size: 0.85rem;
   opacity: 0.7;
-  /* バージョン表示を左に、操作系を右に寄せる。 */
-  margin-right: auto;
+  /* 保存/キャンセルと同じ行で、バージョン以降（更新確認系）を右端に寄せる。 */
+  margin-left: auto;
+}
+
+/* GitHub(octocat) アイコンボタン。枠なし・現在色を継承するアイコンのみ。 */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  background: transparent;
+  color: inherit;
+  border: none;
+  border-radius: 6px;
+  opacity: 0.7;
+}
+
+.icon-btn:hover {
+  opacity: 1;
+  filter: none;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.icon-btn svg {
+  display: block;
 }
 
 .status {

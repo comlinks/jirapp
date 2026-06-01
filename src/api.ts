@@ -35,3 +35,8 @@ export function closeSettingsWindow(): Promise<void> {
 export function isJiraOpen(): Promise<boolean> {
   return invoke<boolean>("is_jira_open");
 }
+
+/** 既定ブラウザで URL を開く（http/https のみ。GitHub リンク等）。 */
+export function openUrl(url: string): Promise<void> {
+  return invoke("open_url", { url });
+}

@@ -73,6 +73,27 @@ pub fn close_settings_window(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// 既定ブラウザで URL を開く（設定画面の GitHub リンク等）。
+///
+/// セキュリティ: http/https のスキームのみ許可し、`explorer.exe` に URL を
+/// **引数として**渡す（シェルを介さずインジェクションを避ける）。任意プロトコルや
+/// `file:` 等は弾く。
+#[tauri::command]
+pub fn open_url(url: String) -> Result<(), String> {
+    let parsed = tauri::Url::parse(&url).map_err(|e| format!("URL が不正です: {e}"))?;
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return Err("http/https の URL のみ開けます".into());
+    }
+    #[cfg(windows)]
+    {
+        std::process::Command::new("explorer.exe")
+            .arg(parsed.as_str())
+            .spawn()
+            .map_err(|e| format!("URL を開けません: {e}"))?;
+    }
+    Ok(())
+}
+
 /// Jira ウィンドウが開いているか。フロントのボタン表示切替（Jiraを開く⇄設定を閉じる）に使う。
 #[tauri::command]
 pub fn is_jira_open(app: AppHandle) -> bool {

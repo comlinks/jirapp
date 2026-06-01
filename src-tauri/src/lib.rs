@@ -95,6 +95,7 @@ pub fn run() {
             commands::apply_to_jira_window,
             commands::hide_settings_window,
             commands::close_settings_window,
+            commands::open_url,
             commands::is_jira_open,
         ])
         .run(tauri::generate_context!())
