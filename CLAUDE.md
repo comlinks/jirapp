@@ -25,7 +25,8 @@ Jira 専用ブラウザ（Site-Specific Browser）。Jira Cloud（`*.atlassian.n
 
 ### フロント（`src/`）
 
-- **`App.vue`** — 設定 UI。`jiraOpen` でボタンを「Jira を開く ⇄ 設定を閉じる」に切替。`settings:refresh` イベントで状態追従。
+- **`App.vue`** — 設定 UI。操作行は「保存して閉じる」(primary) / 「キャンセル」、続けてバージョン表記・GitHub(octocat) リンク・セルフアップデートの「更新を確認」を同じ行に右寄せで並べる。`settings:refresh` イベントで状態追従。
+- **`composables/useUpdater.ts`** — セルフアップデートの状態管理（`check` / `downloadAndInstall` → `relaunch`）。
 - **`api.ts`** — `invoke` ラッパ。設定の読み書き・ウィンドウ操作はすべてここ経由。
 - **`types.ts`** — Rust の `Settings`（camelCase）に対応する型。
 - **`styles.css`** — テーマ変数 `--bg` を定義（ライト/ダーク）。フッターのグラデもこれに追従。
@@ -42,9 +43,10 @@ Jira 専用ブラウザ（Site-Specific Browser）。Jira Cloud（`*.atlassian.n
 ### 起動・表示フロー（`lib.rs` setup ＋ commands）
 
 - 起動時、保存 URL が **空 → 設定ウィンドウを表示** / **設定済み → Jira を自動オープン**（設定ウィンドウは非表示のまま。自動オープン失敗時は設定ウィンドウを表示）。
-- `open_jira_window`（フロントの「Jira を開く」）→ Jira を開いたら設定ウィンドウを `hide`。
+- フロントの「保存して閉じる」→ 保存後、Jira が開いていれば `apply_to_jira_window`＋`hide_settings_window`、未オープンなら `open_jira_window`（Jira を開いたら設定ウィンドウを `hide`）。
+- 「キャンセル」→ 編集を破棄して `close_settings_window`（Jira があれば `hide`、無ければ `app.exit(0)`＝main ✕ と同じ挙動）。
 - Jira のシステムメニュー「設定を開く」→ `reveal_settings`（main を `show`＋`set_focus`＋`settings:refresh` 発火）。
-- フロントは `is_jira_open` ＋ `settings:refresh` でボタン表示を切替。「設定を閉じる」→ `hide_settings_window`。
+- フロントは `is_jira_open` ＋ `settings:refresh` で状態追従する（ボタン自体は常に表示）。
 - **クローズ挙動**:
   - `main` の ✕: Jira が開いていれば閉じず `hide`（＝設定を閉じる扱い）。Jira が無ければ閉じて終了。
   - `jira` の ✕: 設定ウィンドウが非表示なら `app.exit(0)`（アプリ終了）。`Destroyed` で `settings:refresh` を発火しフロントを更新。
@@ -52,7 +54,9 @@ Jira 専用ブラウザ（Site-Specific Browser）。Jira Cloud（`*.atlassian.n
 
 ### Tauri コマンド（`generate_handler!`）
 
-`get_settings` / `save_settings` / `open_jira_window`（**async**）/ `apply_to_jira_window` / `hide_settings_window` / `is_jira_open`。`reveal_settings` はコマンドではなくメニューイベント用の共通関数。
+`get_settings` / `save_settings` / `open_jira_window`（**async**）/ `apply_to_jira_window` / `hide_settings_window` / `close_settings_window` / `open_url` / `is_jira_open`。`reveal_settings` はコマンドではなくメニューイベント用の共通関数。
+
+- `open_url` — 既定ブラウザで URL を開く（設定画面の GitHub リンク用）。**http/https のみ許可**し、`explorer.exe` に URL を**引数として**渡す（シェル非経由でインジェクション回避）。
 
 ## 重要な設計方針・ハマりどころ
 
@@ -120,4 +124,5 @@ WebView2 のユーザーデータフォルダを `lib.rs` 冒頭の環境変数 
 - セッションがシステムブラウザと分離されているか（別アカウントでログインしても干渉しないか）。
 - 注入した JS/CSS が CSP で弾かれていないか（Jira ウィンドウの devtools コンソールでエラー確認。`F12` / `Ctrl+Shift+I` で開ける）。
 - アイドル判定が誤発火していないか（操作中にリロードされない）。
-- 起動分岐・設定の表示/非表示・「設定を閉じる」切替・Jira クローズ時の終了・ウィンドウ位置復元が想定どおりか。
+- 起動分岐・設定の表示/非表示・「保存して閉じる」/「キャンセル」の挙動・Jira クローズ時の終了・ウィンドウ位置復元が想定どおりか。
+- チケットのドラッグ&ドロップが効くか（`disable_drag_drop_handler()` が前提）。「更新を確認」「GitHub リンク」が動くか。
