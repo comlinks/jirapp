@@ -29,7 +29,7 @@ serde_json = "1"
 # Jira ウィンドウのシステムメニュー（タイトルバー左上アイコンのメニュー）に
 # 「設定を開く」を追加するための Win32 連携。バージョンは tauri/tao が使う 0.61 に合わせる。
 [target.'cfg(windows)'.dependencies]
-windows = { version = "0.61", features = [
+windows = { version = "0.62", features = [
   "Win32_Foundation",
   "Win32_UI_WindowsAndMessaging",
   "Win32_UI_Shell",
