@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [0.2.0] - 2026-06-01
 
+### Features
+
+- **セルフアップデート**: 設定画面に「更新を確認」を追加。GitHub Releases の `latest.json` を参照し、新しい署名済みバージョンがあればダウンロード＆適用して自動再起動する（`tauri-plugin-updater` + `tauri-plugin-process`）。updater/process の権限は設定ウィンドウ (`main`) のみにスコープし、Jira ウィンドウには付与しない。
+
 ### Bug Fixes
 
 - **チケットのドラッグが出来ない (#1)**: Tauri がデフォルトで登録する OS レベルの drag-drop ハンドラが、Jira ボードの HTML5 ドラッグ&ドロップ（カード移動など）を横取りして無効化していた。Jira ウィンドウ生成時に `disable_drag_drop_handler()` を呼び、WebView 内のネイティブな D&D を有効化。

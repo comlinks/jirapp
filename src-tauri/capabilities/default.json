@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "設定ウィンドウ (main) 用の既定 capability。Jira ウィンドウ (jira) には Tauri API を一切与えない（リモートコンテンツのため）。",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": ["core:default", "updater:default", "process:default"]
 }

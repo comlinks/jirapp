@@ -19,6 +19,10 @@ tauri = { version = "2", features = [] }
 tauri-plugin-store = "2"
 # Jira ウィンドウの位置・サイズ・最大化状態を保存し、次回起動時に復元する。
 tauri-plugin-window-state = "2"
+# セルフアップデート（GitHub Releases の latest.json を参照して更新を取得）。
+tauri-plugin-updater = "2"
+# アップデート適用後の再起動に使う。
+tauri-plugin-process = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 

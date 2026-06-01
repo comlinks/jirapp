@@ -41,6 +41,9 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_store::Builder::new().build())
+        // セルフアップデート（更新確認・ダウンロード）と適用後の再起動。
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         // Jira ウィンドウの位置・サイズ・最大化状態を保存／復元する。
         // 設定(main)ウィンドウは固定サイズ・最大化禁止のため状態管理から除外する。
         .plugin(

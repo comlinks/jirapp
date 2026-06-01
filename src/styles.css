@@ -136,6 +136,22 @@ button:disabled {
   cursor: not-allowed;
 }
 
+.updater {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.updater .version {
+  font-size: 0.85rem;
+  opacity: 0.7;
+  /* バージョン表示を左に、操作系を右に寄せる。 */
+  margin-right: auto;
+}
+
 .status {
   font-size: 0.85rem;
   opacity: 0.9;

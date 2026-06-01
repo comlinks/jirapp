@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, reactive, ref } from "vue";
+import { computed, onMounted, onUnmounted, reactive, ref } from "vue";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { Settings } from "./types";
 import {
@@ -11,6 +11,28 @@ import {
   openJiraWindow,
   saveSettings,
 } from "./api";
+import { useUpdater } from "./composables/useUpdater";
+
+// セルフアップデート（更新確認・ダウンロード・再起動）。設定ウィンドウ内でのみ使う。
+const updater = useUpdater();
+
+// 更新フローの状態を日本語メッセージにする。
+const updaterStatusText = computed(() => {
+  switch (updater.state.value) {
+    case "checking":
+      return "更新を確認しています…";
+    case "available":
+      return `新しいバージョン v${updater.updateVersion.value} があります`;
+    case "downloading":
+      return "ダウンロードして適用中…（完了後に自動で再起動します）";
+    case "upToDate":
+      return "最新版です";
+    case "error":
+      return `更新に失敗: ${updater.errorMessage.value}`;
+    default:
+      return "";
+  }
+});
 
 const settings = reactive<Settings>({
   jiraUrl: "",
@@ -210,6 +232,29 @@ async function cancel() {
           キャンセル
         </button>
         <span class="status" :class="{ error: isError }">{{ status }}</span>
+      </div>
+
+      <div class="updater">
+        <span class="version">バージョン {{ updater.appVersion.value || "—" }}</span>
+        <button
+          class="secondary"
+          :disabled="updater.isBusy.value"
+          @click="updater.checkForUpdate"
+        >
+          更新を確認
+        </button>
+        <button
+          v-if="updater.state.value === 'available'"
+          :disabled="updater.isBusy.value"
+          @click="updater.downloadAndInstall"
+        >
+          v{{ updater.updateVersion.value }} に更新して再起動
+        </button>
+        <span
+          class="status"
+          :class="{ error: updater.state.value === 'error' }"
+          >{{ updaterStatusText }}</span
+        >
       </div>
     </template>
 

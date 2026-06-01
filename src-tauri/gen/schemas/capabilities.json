@@ -1,1 +1,1 @@
-{"default":{"identifier":"default","description":"設定ウィンドウ (main) 用の既定 capability。Jira ウィンドウ (jira) には Tauri API を一切与えない（リモートコンテンツのため）。","local":true,"windows":["main"],"permissions":["core:default"]}}
+{"default":{"identifier":"default","description":"設定ウィンドウ (main) 用の既定 capability。Jira ウィンドウ (jira) には Tauri API を一切与えない（リモートコンテンツのため）。","local":true,"windows":["main"],"permissions":["core:default","updater:default","process:default"]}}

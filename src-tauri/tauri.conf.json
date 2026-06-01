@@ -27,6 +27,17 @@
       "csp": null
     }
   },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDk5NkVEMTNERTJBMjY0OEMKUldTTVpLTGlQZEZ1bWZlbXd2Y0dNN0JLK2ZBODVVbzJWeU0vbmt6NE9QS1FPUGlvWlA4ai9DL1oK",
+      "endpoints": [
+        "https://github.com/comlinks/jirapp/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  },
   "bundle": {
     "active": true,
     "targets": ["nsis"],

@@ -10,6 +10,7 @@ Jira 専用ブラウザ（Site-Specific Browser）。Jira Cloud（`*.atlassian.n
 - **WebView**: WebView2（Windows / Chromium ベース）
 - **設定永続化**: `tauri-plugin-store`
 - **ウィンドウ状態**: `tauri-plugin-window-state`（Jira ウィンドウの位置・サイズ・最大化）
+- **セルフアップデート**: `tauri-plugin-updater`（GitHub Releases の `latest.json` を参照）＋ `tauri-plugin-process`（適用後の再起動）。権限は設定ウィンドウ(`main`)のみ。
 - **Win32 連携**: `windows` クレート（Jira ウィンドウのシステムメニュー）
 - **対象 OS**: Windows のみ（クロスプラットフォーム不要）
 
@@ -81,7 +82,7 @@ WebView2 のユーザーデータフォルダを `lib.rs` 冒頭の環境変数 
 
 ### Jira ウィンドウにはリモート IPC を与えない（セキュリティ境界）
 
-`capabilities/default.json` の capability は **`main` のみ**にスコープし、Jira ウィンドウ（リモートコンテンツ）には Tauri API/IPC を一切与えない。
+`capabilities/default.json` の capability は **`main` のみ**にスコープし、Jira ウィンドウ（リモートコンテンツ）には Tauri API/IPC を一切与えない。`updater:default` / `process:default`（セルフアップデート）も同様に `main` 限定で、Jira 側からは更新 API を呼べない。
 
 - 「設定を開く」導線は IPC ではなく **Win32 のシステムメニュー**（`jira.rs` の `sysmenu` モジュール）で実装している。`GetSystemMenu` に項目を追加し、`SetWindowSubclass` で `WM_SYSCOMMAND` を拾って `reveal_settings` を呼ぶ。WM_NCDESTROY でサブクラス解除＋コールバック回収（リークなし）。
 - この境界は維持すること。Jira 側に新しい導線を足す場合も、IPC ではなくネイティブ機構（メニュー等）で。

@@ -2,7 +2,11 @@ name: Release
 
 # v* タグの push で起動し、NSIS インストーラをビルドして
 # GitHub Release（下書き）を作成・アセットを添付する。
-# jirapp は updater プラグインを使わないため署名鍵・updater JSON は不要。
+# セルフアップデート用に latest.json も生成・添付する（updater 署名が必要）。
+#
+# 必要な GitHub Secret:
+#   TAURI_SIGNING_PRIVATE_KEY — `tauri signer generate` で生成した秘密鍵の中身
+#   （鍵をパスワード無しで生成した場合は PASSWORD secret は不要。空文字を渡す）
 
 on:
   push:
@@ -41,9 +45,15 @@ jobs:
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # updater 用の署名。鍵はパスワード無しで生成しているため PASSWORD は空文字。
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "jirapp ${{ github.ref_name }}"
-          releaseBody: "アセットの NSIS インストーラ (_x64-setup.exe) をダウンロードしてインストールしてください。未署名のため初回起動時に SmartScreen 警告が出ることがあります（詳細情報 → 実行）。"
+          releaseBody: "アセットの NSIS インストーラ (_x64-setup.exe) をダウンロードしてインストールしてください。未署名（コード署名）のため初回起動時に SmartScreen 警告が出ることがあります（詳細情報 → 実行）。"
           releaseDraft: true
           prerelease: false
+          # セルフアップデート用の latest.json を生成・添付する（NSIS を優先）。
+          includeUpdaterJson: true
+          updaterJsonPreferNsis: true
