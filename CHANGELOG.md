@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - 2026-06-02
+
+### Features
+
+- **設定画面の GitHub リンク**: バージョン表記の右に octocat アイコンを追加し、クリックで GitHub リポジトリを既定ブラウザで開く（`open_url` コマンド: http/https のみ許可し `explorer.exe` に引数渡しでシェルインジェクションを回避）。
+- **操作行の整理**: 「保存して閉じる」「キャンセル」とバージョン/GitHub/「更新を確認」を同じ行に統合し、更新系を右寄せに（`flex-wrap` で狭い幅では折り返し）。
+
+### Internal
+
+- **フロントのビルドツールをメジャー更新**: vite 6→8、@vitejs/plugin-vue 5→6、vue-tsc 2→3、typescript 5.7→6（いずれも dev 依存、`npm run build` で検証）。
+- **Dependabot**: `windows` クレートを自動更新の対象外に（tauri/tao が使う 0.61 に手動追従するため）。
+- **.gitignore 整備**: 秘密情報の安全網（`*.key`/`*.pem`/`.env`/`*.p12`/`*.pfx`/`credentials.json`/`secrets.json`）を追加し、生成物 `src-tauri/gen/schemas` を追跡解除。
+- **`tauri:dev` npm スクリプト**を追加。
+- ドキュメント（CLAUDE.md / README.md）を実装準拠に更新。
+
 ## [0.2.0] - 2026-06-01
 
 ### Features
@@ -45,5 +60,6 @@ Initial release.
 - **設定の永続化** — `tauri-plugin-store` で設定を保存。Jira ウィンドウの位置・サイズ・最大化は `tauri-plugin-window-state` で復元。
 - **設定導線** — リモートコンテンツに IPC を与えないため、Jira ウィンドウのシステムメニュー（Win32）から設定を開く。
 
+[0.3.0]: https://github.com/comlinks/jirapp/releases/tag/v0.3.0
 [0.2.0]: https://github.com/comlinks/jirapp/releases/tag/v0.2.0
 [0.1.0]: https://github.com/comlinks/jirapp/releases/tag/v0.1.0

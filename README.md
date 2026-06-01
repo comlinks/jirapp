@@ -1,5 +1,12 @@
 # jirapp
 
+[![Release](https://img.shields.io/github/v/release/comlinks/jirapp?sort=semver)](https://github.com/comlinks/jirapp/releases/latest)
+[![CI](https://github.com/comlinks/jirapp/actions/workflows/ci.yml/badge.svg)](https://github.com/comlinks/jirapp/actions/workflows/ci.yml)
+[![Tauri v2](https://img.shields.io/badge/Tauri-v2-24C8D8?logo=tauri&logoColor=white)](https://v2.tauri.app)
+[![Vue 3](https://img.shields.io/badge/Vue-3-4FC08D?logo=vuedotjs&logoColor=white)](https://vuejs.org)
+[![Rust](https://img.shields.io/badge/Rust-2021-DEA584?logo=rust&logoColor=white)](https://www.rust-lang.org)
+[![Platform: Windows](https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows&logoColor=white)](#)
+
 Jira 専用ブラウザ（Site-Specific Browser）。Jira Cloud（`*.atlassian.net`）を
 システムブラウザから独立したセッションで表示し、任意の JS/CSS 注入と
 アイドル時の自動リロードを行う Windows 向け Tauri v2 アプリ。
