@@ -371,19 +371,34 @@ mod tests {
     fn allows_only_same_registered_host() {
         let host = "example.atlassian.net";
         // 登録ドメインと同一ホスト（Jira / Confluence いずれのパスでも）→ 許可。
-        assert!(is_same_tenant_url(&url("https://example.atlassian.net/jira/boards"), host));
-        assert!(is_same_tenant_url(&url("https://example.atlassian.net/wiki/spaces/X"), host));
+        assert!(is_same_tenant_url(
+            &url("https://example.atlassian.net/jira/boards"),
+            host
+        ));
+        assert!(is_same_tenant_url(
+            &url("https://example.atlassian.net/wiki/spaces/X"),
+            host
+        ));
     }
 
     #[test]
     fn rejects_other_tenants_and_non_https() {
         let host = "example.atlassian.net";
         // 別テナント（同じ atlassian.net でもホストが違う）は拒否。
-        assert!(!is_same_tenant_url(&url("https://other.atlassian.net/wiki"), host));
+        assert!(!is_same_tenant_url(
+            &url("https://other.atlassian.net/wiki"),
+            host
+        ));
         // http への降格は拒否。
-        assert!(!is_same_tenant_url(&url("http://example.atlassian.net"), host));
+        assert!(!is_same_tenant_url(
+            &url("http://example.atlassian.net"),
+            host
+        ));
         // 別ドメイン（SSO 等）は拒否。
-        assert!(!is_same_tenant_url(&url("https://id.atlassian.com/login"), host));
+        assert!(!is_same_tenant_url(
+            &url("https://id.atlassian.com/login"),
+            host
+        ));
         assert!(!is_same_tenant_url(&url("https://example.com"), host));
     }
 }
