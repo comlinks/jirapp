@@ -1,4 +1,4 @@
-use tauri::webview::PageLoadEvent;
+use tauri::webview::{NewWindowResponse, PageLoadEvent};
 use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 
 use crate::settings::{self, Settings};
@@ -56,6 +56,10 @@ pub(crate) fn build_jira_window<R: Runtime>(
     // 呼び出し前に検証済みのこともあるが、生成スレッド上でも同じ検証を通して Url を得る。
     let parsed = settings::require_jira_url(&s.jira_url)?;
 
+    // 新規ウィンドウ判定で「現在の」登録ホストを参照するためのハンドル。
+    // 設定で URL を変更した後（ウィンドウ再生成せず）でも最新の登録ドメインに追従させる。
+    let app_for_newwin = app.clone();
+
     let mut builder = WebviewWindowBuilder::new(app, JIRA_LABEL, WebviewUrl::External(parsed))
         .title("Jira")
         // 初期サイズ（保存済み状態があれば後で復元して上書きする）。
@@ -67,7 +71,22 @@ pub(crate) fn build_jira_window<R: Runtime>(
         // ネイティブ側に横取りされて動作しない（Windows の WebView2 で必須）。
         .disable_drag_drop_handler()
         // 基盤処理（アイドル検知・リロード・CSS 適用土台）はネイティブ注入。CSP の影響を受けにくい。
-        .initialization_script(MACHINERY_JS);
+        .initialization_script(MACHINERY_JS)
+        // 新規ウィンドウ要求（target=_blank / window.open）の扱い。
+        //  - 同じ atlassian.net テナント（Confluence 等）→ Allow。WebView2 が
+        //    同一環境（＝同一 UDF/セッション）で別ウィンドウのポップアップを開く。
+        //    Tauri 管理外の素の WebView2 ウィンドウなので IPC は一切渡らない（境界維持）。
+        //  - それ以外 → Deny（従来どおり抑制）。SSO 等のポップアップを外部ブラウザへ
+        //    逃がして壊さないよう、現状の挙動を保つ。
+        // 既定（ハンドラ未設定）では new-window 要求は wry に抑制され「リンクが効かない」。
+        .on_new_window(move |url, _features| {
+            if registered_host(&app_for_newwin).is_some_and(|host| is_same_tenant_url(&url, &host))
+            {
+                NewWindowResponse::Allow
+            } else {
+                NewWindowResponse::Deny
+            }
+        });
 
     // ユーザー JS は別 initialization_script としてネイティブ注入（CSP 非対象）。
     // 構文エラーがあってもこの script 内に閉じ、基盤処理は壊さない。
@@ -233,6 +252,20 @@ pub fn apply<R: Runtime>(app: &AppHandle<R>, s: &Settings) -> Result<(), String>
     Ok(())
 }
 
+/// 新規ウィンドウ要求の URL が、登録した Jira と「同一ホスト（同一テナント）」への
+/// https リンクかどうか。これに該当する場合のみポップアップで開かせる（同一セッション）。
+/// `*.atlassian.net` 全体ではなく、登録ドメインと完全一致のものだけを対象にする。
+fn is_same_tenant_url(target: &tauri::Url, registered_host: &str) -> bool {
+    target.scheme() == "https" && target.host_str() == Some(registered_host)
+}
+
+/// 現在登録されている Jira URL のホスト名を取り出す（未設定・不正なら None）。
+fn registered_host<R: Runtime>(app: &AppHandle<R>) -> Option<String> {
+    let raw = app.try_state::<AppState>()?.snapshot().jira_url;
+    let url = tauri::Url::parse(raw.trim()).ok()?;
+    url.host_str().map(|h| h.to_string())
+}
+
 /// ユーザー JS をネイティブ注入用にラップする。
 fn user_js_wrapper(js: &str) -> String {
     format!("try {{\n{js}\n}} catch (e) {{ console.error('[jirapp] user JS error', e); }}")
@@ -325,3 +358,32 @@ const MACHINERY_JS: &str = r#"
   }
 })();
 "#;
+
+#[cfg(test)]
+mod tests {
+    use super::is_same_tenant_url;
+
+    fn url(s: &str) -> tauri::Url {
+        tauri::Url::parse(s).expect("valid url")
+    }
+
+    #[test]
+    fn allows_only_same_registered_host() {
+        let host = "example.atlassian.net";
+        // 登録ドメインと同一ホスト（Jira / Confluence いずれのパスでも）→ 許可。
+        assert!(is_same_tenant_url(&url("https://example.atlassian.net/jira/boards"), host));
+        assert!(is_same_tenant_url(&url("https://example.atlassian.net/wiki/spaces/X"), host));
+    }
+
+    #[test]
+    fn rejects_other_tenants_and_non_https() {
+        let host = "example.atlassian.net";
+        // 別テナント（同じ atlassian.net でもホストが違う）は拒否。
+        assert!(!is_same_tenant_url(&url("https://other.atlassian.net/wiki"), host));
+        // http への降格は拒否。
+        assert!(!is_same_tenant_url(&url("http://example.atlassian.net"), host));
+        // 別ドメイン（SSO 等）は拒否。
+        assert!(!is_same_tenant_url(&url("https://id.atlassian.com/login"), host));
+        assert!(!is_same_tenant_url(&url("https://example.com"), host));
+    }
+}
