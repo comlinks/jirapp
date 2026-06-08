@@ -103,6 +103,8 @@ textarea {
   gap: 10px;
   align-items: center;
   margin-top: 24px;
+  /* ウィンドウ高はコンテンツに自動フィットさせるため通常は最下部に並ぶ。
+     コンテンツが画面上限を超えてスクロールする場合も下端へ張り付かせる。 */
   position: sticky;
   bottom: 0;
   padding: 16px 0;
@@ -165,6 +167,49 @@ button:disabled {
 
 .icon-btn svg {
   display: block;
+}
+
+/* 更新あり案内バナー（フォーム上部）。アクセント色で目立たせる。 */
+.update-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: color-mix(in srgb, #4361ee 14%, var(--bg));
+  border: 1px solid color-mix(in srgb, #4361ee 45%, transparent);
+}
+
+.update-banner__text {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.update-banner__btn {
+  margin-left: auto;
+}
+
+/* 詳細設定の折り畳み（CSS/JS 注入）。 */
+.advanced {
+  margin-bottom: 18px;
+}
+
+.advanced > summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 6px 0;
+  user-select: none;
+  opacity: 0.85;
+}
+
+.advanced > summary:hover {
+  opacity: 1;
+}
+
+.advanced[open] > summary {
+  margin-bottom: 12px;
 }
 
 .status {

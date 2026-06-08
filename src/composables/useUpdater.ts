@@ -36,7 +36,13 @@ export function useUpdater() {
     () => state.value === "checking" || state.value === "downloading",
   );
 
-  async function checkForUpdate() {
+  // 更新確認。`silent` 指定時（設定ウィンドウを開いた際の自動チェック）は、
+  // 最新・失敗（オフライン等）でも UI を騒がせず idle に戻す。更新が見つかった
+  // 場合のみ available にしてバナーを出す。手動の「更新を確認」では従来どおり
+  // 最新表示・エラー表示を行う。
+  async function checkForUpdate(opts?: { silent?: boolean }) {
+    // 確認中・適用中の二重実行を避ける（自動チェックと手動チェックの競合防止）。
+    if (state.value === "checking" || state.value === "downloading") return;
     state.value = "checking";
     errorMessage.value = "";
     try {
@@ -46,11 +52,15 @@ export function useUpdater() {
         updateVersion.value = update.version;
         state.value = "available";
       } else {
-        state.value = "upToDate";
+        state.value = opts?.silent ? "idle" : "upToDate";
       }
     } catch (e) {
-      errorMessage.value = String(e);
-      state.value = "error";
+      if (opts?.silent) {
+        state.value = "idle";
+      } else {
+        errorMessage.value = String(e);
+        state.value = "error";
+      }
     }
   }
 

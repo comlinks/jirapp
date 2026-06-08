@@ -97,6 +97,7 @@ pub fn run() {
             commands::close_settings_window,
             commands::open_url,
             commands::is_jira_open,
+            commands::set_settings_height,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -100,6 +100,28 @@ pub fn is_jira_open(app: AppHandle) -> bool {
     app.get_webview_window(jira::JIRA_LABEL).is_some()
 }
 
+/// 設定ウィンドウ(main)の高さを、フロントが測った実コンテンツ高(CSS px)に合わせる。
+/// 詳細設定の折り畳み開閉やバナー表示などで「丁度良い」高さに自動調整するために使う。
+/// 幅は現在値を維持し、高さのみ論理サイズで設定する。
+#[tauri::command]
+pub fn set_settings_height(app: AppHandle, height: f64) -> Result<(), String> {
+    if let Some(main) = app.get_webview_window("main") {
+        // 最大化中はユーザーの意図を尊重して触らない。
+        if main.is_maximized().unwrap_or(false) {
+            return Ok(());
+        }
+        let scale = main.scale_factor().map_err(|e| e.to_string())?;
+        let cur = main.inner_size().map_err(|e| e.to_string())?;
+        // 幅は現在の見た目（論理px）を維持する。
+        let logical_w = cur.width as f64 / scale;
+        // 下限を設けて潰れすぎを防ぐ（tauri.conf.json の minHeight と整合）。
+        let h = height.max(240.0);
+        main.set_size(tauri::LogicalSize::new(logical_w, h))
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 /// 設定ウィンドウを表示してフォーカスする（イベント通知はしない）。
 pub fn show_main<R: Runtime>(app: &AppHandle<R>) {
     if let Some(main) = app.get_webview_window("main") {

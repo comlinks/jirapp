@@ -40,3 +40,8 @@ export function isJiraOpen(): Promise<boolean> {
 export function openUrl(url: string): Promise<void> {
   return invoke("open_url", { url });
 }
+
+/** 設定ウィンドウの高さを実コンテンツ高(CSS px)に合わせる（折り畳み開閉などで丁度良く）。 */
+export function setSettingsHeight(height: number): Promise<void> {
+  return invoke("set_settings_height", { height });
+}

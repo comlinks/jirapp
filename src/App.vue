@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, reactive, ref } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from "vue";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { Settings } from "./types";
 import {
@@ -11,6 +11,7 @@ import {
   openJiraWindow,
   openUrl,
   saveSettings,
+  setSettingsHeight,
 } from "./api";
 import { useUpdater } from "./composables/useUpdater";
 
@@ -63,6 +64,30 @@ const jiraOpen = ref(false);
 // settings:refresh リスナーの解除関数（アンマウント時に多重登録/リークを防ぐ）。
 let unlisten: UnlistenFn | null = null;
 
+// 実コンテンツ高に追従してウィンドウ高を調整する（詳細設定の開閉・バナー・テキストエリア
+// リサイズなどで「丁度良い」高さにする）。直近送信値を保持して無駄な resize を抑える。
+let contentObserver: ResizeObserver | null = null;
+let lastSentHeight = 0;
+
+// #app の自然な高さ（padding 込み, CSS px）を測ってウィンドウ高に反映する。
+// #app は viewport 連動の高さ指定を持たないため offsetHeight = 実コンテンツ高で、
+// ウィンドウ高を変えても再測定値は変わらない（リサイズの無限ループは起きない）。
+function syncWindowHeight() {
+  const el = document.getElementById("app");
+  if (!el) return;
+  const content = Math.ceil(el.offsetHeight);
+  // 上限は画面内に収める（はみ出し防止）。下限は Rust の set_settings_height と
+  // ウィンドウ minHeight が担保するため、ここでは課さない（240px の一元管理）。
+  const maxH = Math.floor(window.screen.availHeight * 0.95);
+  const target = Math.min(content, maxH);
+  // 1px 程度の揺れでは送らない（スクロールバー出現等のチャタリング防止）。
+  if (Math.abs(target - lastSentHeight) < 2) return;
+  lastSentHeight = target;
+  setSettingsHeight(target).catch(() => {
+    /* 失敗時は据え置き */
+  });
+}
+
 function setStatus(msg: string, error = false) {
   status.value = msg;
   isError.value = error;
@@ -96,16 +121,34 @@ onMounted(async () => {
     loading.value = false;
   }
   await refreshJiraOpen();
+  // 設定ウィンドウを開いたタイミングで更新を自動チェックする（最新版があればバナー表示）。
+  // 自動チェックは silent: 最新・失敗時は静かに idle に戻し、更新ありのときだけ available。
+  updater.checkForUpdate({ silent: true });
   // Rust 側（メニューからの再表示・Jira クローズ）からの状態更新通知でボタン表示を追従させる。
   unlisten = await listen("settings:refresh", () => {
     setStatus("");
     refreshJiraOpen();
+    // メニュー「設定を開く」等で設定が再表示されるたびに更新も確認する。
+    updater.checkForUpdate({ silent: true });
+    syncWindowHeight();
   });
+
+  // コンテンツ描画後に初回フィットし、以降は #app の高さ変化（折り畳み開閉・
+  // バナー・テキストエリアのリサイズ）に追従してウィンドウ高を調整する。
+  await nextTick();
+  syncWindowHeight();
+  const appEl = document.getElementById("app");
+  if (appEl && typeof ResizeObserver !== "undefined") {
+    contentObserver = new ResizeObserver(() => syncWindowHeight());
+    contentObserver.observe(appEl);
+  }
 });
 
 onUnmounted(() => {
   unlisten?.();
   unlisten = null;
+  contentObserver?.disconnect();
+  contentObserver = null;
 });
 
 // 保存して閉じる（primary）。設定を保存し、Jira が開いていれば適用して設定を隠す。
@@ -157,6 +200,20 @@ async function cancel() {
     </p>
 
     <template v-if="!loading">
+      <!-- 更新が見つかったら目立つバナーで案内する（自動チェック/手動チェック共通）。 -->
+      <div v-if="updater.state.value === 'available'" class="update-banner">
+        <span class="update-banner__text">
+          新しいバージョン v{{ updater.updateVersion.value }} があります。
+        </span>
+        <button
+          class="update-banner__btn"
+          :disabled="updater.isBusy.value"
+          @click="updater.downloadAndInstall"
+        >
+          今すぐ更新して再起動
+        </button>
+      </div>
+
       <div class="field">
         <label for="jiraUrl">
           Jira URL
@@ -171,69 +228,74 @@ async function cancel() {
         />
       </div>
 
-      <div class="field checkbox">
-        <input
-          id="autoReload"
-          v-model="settings.autoReloadEnabled"
-          type="checkbox"
-        />
-        <label for="autoReload" style="margin: 0">
-          アイドル時に自動リロードする
-        </label>
-      </div>
+      <!-- 詳細設定: リロード設定と CSS/JS 注入は通常はいじらないため既定で折り畳む。 -->
+      <details class="advanced">
+        <summary>詳細設定</summary>
 
-      <div class="row">
-        <div class="field">
-          <label for="idle">
-            アイドル閾値（秒）
-            <span class="hint">最後の操作からこの秒数で「アイドル」</span>
-          </label>
+        <div class="field checkbox">
           <input
-            id="idle"
-            v-model.number="settings.idleThresholdSecs"
-            type="number"
-            min="5"
+            id="autoReload"
+            v-model="settings.autoReloadEnabled"
+            type="checkbox"
           />
-        </div>
-        <div class="field">
-          <label for="interval">
-            チェック間隔（秒）
-            <span class="hint">アイドル判定の確認頻度</span>
+          <label for="autoReload" style="margin: 0">
+            アイドル時に自動リロードする
           </label>
-          <input
-            id="interval"
-            v-model.number="settings.reloadCheckIntervalSecs"
-            type="number"
-            min="5"
-          />
         </div>
-      </div>
 
-      <div class="field">
-        <label for="css">
-          注入する CSS
-          <span class="hint">ロード後に &lt;style&gt; として適用</span>
-        </label>
-        <textarea
-          id="css"
-          v-model="settings.customCss"
-          spellcheck="false"
-          placeholder="/* 例: ヘッダーを隠す */&#10;header { display: none; }"
-        ></textarea>
-      </div>
+        <div class="row">
+          <div class="field">
+            <label for="idle">
+              アイドル閾値（秒）
+              <span class="hint">最後の操作からこの秒数で「アイドル」</span>
+            </label>
+            <input
+              id="idle"
+              v-model.number="settings.idleThresholdSecs"
+              type="number"
+              min="5"
+            />
+          </div>
+          <div class="field">
+            <label for="interval">
+              チェック間隔（秒）
+              <span class="hint">アイドル判定の確認頻度</span>
+            </label>
+            <input
+              id="interval"
+              v-model.number="settings.reloadCheckIntervalSecs"
+              type="number"
+              min="5"
+            />
+          </div>
+        </div>
 
-      <div class="field">
-        <label for="js">
-          注入する JS
-          <span class="hint">各ページロード後に実行（変更は Jira を開き直すと反映）</span>
-        </label>
-        <textarea
-          id="js"
-          v-model="settings.customJs"
-          spellcheck="false"
-          placeholder="// 例: console.log('jirapp injected');"
-        ></textarea>
-      </div>
+        <div class="field">
+          <label for="css">
+            注入する CSS
+            <span class="hint">ロード後に &lt;style&gt; として適用</span>
+          </label>
+          <textarea
+            id="css"
+            v-model="settings.customCss"
+            spellcheck="false"
+            placeholder="/* 例: ヘッダーを隠す */&#10;header { display: none; }"
+          ></textarea>
+        </div>
+
+        <div class="field">
+          <label for="js">
+            注入する JS
+            <span class="hint">各ページロード後に実行（変更は Jira を開き直すと反映）</span>
+          </label>
+          <textarea
+            id="js"
+            v-model="settings.customJs"
+            spellcheck="false"
+            placeholder="// 例: console.log('jirapp injected');"
+          ></textarea>
+        </div>
+      </details>
 
       <div class="actions">
         <button :disabled="busy" @click="saveAndClose">
@@ -262,7 +324,7 @@ async function cancel() {
         <button
           class="secondary"
           :disabled="updater.isBusy.value"
-          @click="updater.checkForUpdate"
+          @click="() => updater.checkForUpdate()"
         >
           更新を確認
         </button>
