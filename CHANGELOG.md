@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] - 2026-06-08
+
+### Features
+
+- **同一テナントのリンクを別ウィンドウで開く** (#10): 登録した Jira と同一ホスト（Confluence 等の同一 `*.atlassian.net` テナント）への `target=_blank` / `window.open` を、同一セッションのまま別ウィンドウ（WebView2 ポップアップ）で開く。別テナント・非 https・外部ドメインは従来どおり抑制し、SSO 等のポップアップ挙動は変えない。ポップアップは Tauri 管理外のため IPC は渡らず境界を維持（`jira.rs` の `on_new_window`）。
+- **設定ウィンドウを開いたタイミングで更新を自動チェック** (#8): 設定表示時に更新を確認し、更新があればフォーム上部のバナーで案内。自動チェックは silent（最新・失敗時は静かに idle へ、更新時のみ表示）。手動「更新を確認」は従来どおり最新/エラーを表示。
+- **詳細設定の折り畳み** (#9): リロード設定（自動リロード・アイドル閾値・チェック間隔）と CSS/JS 注入を「詳細設定」(`<details>`) として既定で折り畳む。折り畳み時は Jira URL のみ表示。
+
+### Improvements
+
+- **操作ボタンを下端に固定し、ウィンドウ高を自動調整**: 詳細設定の開閉・更新バナー・テキストエリアのリサイズに応じて、設定ウィンドウの高さを実コンテンツ高へ自動フィット（`set_settings_height` コマンド + `ResizeObserver`）。
+
 ## [0.3.0] - 2026-06-02
 
 ### Features
@@ -60,6 +72,7 @@ Initial release.
 - **設定の永続化** — `tauri-plugin-store` で設定を保存。Jira ウィンドウの位置・サイズ・最大化は `tauri-plugin-window-state` で復元。
 - **設定導線** — リモートコンテンツに IPC を与えないため、Jira ウィンドウのシステムメニュー（Win32）から設定を開く。
 
+[0.4.0]: https://github.com/comlinks/jirapp/releases/tag/v0.4.0
 [0.3.0]: https://github.com/comlinks/jirapp/releases/tag/v0.3.0
 [0.2.0]: https://github.com/comlinks/jirapp/releases/tag/v0.2.0
 [0.1.0]: https://github.com/comlinks/jirapp/releases/tag/v0.1.0
