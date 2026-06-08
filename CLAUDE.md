@@ -112,6 +112,11 @@ WebView2 のユーザーデータフォルダを `lib.rs` 冒頭の環境変数 
 - ビルド確認（基線＝どちらも警告ゼロで通ること）:
   - `cargo check --manifest-path src-tauri/Cargo.toml`
   - `npm run build`
+- **コミット／リリース前は CI 相当チェックをローカルでも回す**（CI = `.github/workflows/ci.yml` が main への push / PR で `cargo fmt --check` → `cargo clippy --all-targets -- -D warnings` → `cargo test` を順に実行）。`cargo check` / `npm run build` が通っても **`cargo fmt --check` は別物**で、整形漏れがあると CI（lint）だけ赤くなる（実害あり: v0.4.0 で発生）。
+  - `cargo fmt --manifest-path src-tauri/Cargo.toml --check`（整形だけなら `--check` を外して適用）
+  - `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`
+  - `cargo test --manifest-path src-tauri/Cargo.toml`
+  - 注意: `clippy` / `tauri build` は `tauri-winres` が `rc.exe` を要求するため、vcvars を読み込んでから実行する（`fmt --check` / `cargo test` は不要）。詳細はリリース手順のメモ参照。
 - 起動: `npm run tauri dev`（`! npm run tauri dev` でこのセッションのログに出せる）。
 - **環境上の注意（過去に実害あり）**:
   - 重要な Write/Edit は **1 つずつ**実行し、長時間のビルドコマンドと同一バッチに混ぜない（並列バッチで書き込み競合・ファイル破損が起きた実績あり）。
