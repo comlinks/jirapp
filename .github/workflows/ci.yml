@@ -16,7 +16,7 @@ jobs:
     steps:
       # Windows ランナーでの CRLF 自動変換による diff/format 誤検知を防ぐ。
       - run: git config --global core.autocrlf false
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v6
         with:
