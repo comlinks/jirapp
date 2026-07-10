@@ -55,5 +55,7 @@ jobs:
           releaseDraft: true
           prerelease: false
           # セルフアップデート用の latest.json を生成・添付する（NSIS を優先）。
-          includeUpdaterJson: true
+          # 入力名は tauri-action の現行仕様に合わせる（旧 includeUpdaterJson は
+          # 認識されず無視されるため uploadUpdaterJson を使う）。
+          uploadUpdaterJson: true
           updaterJsonPreferNsis: true
