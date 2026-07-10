@@ -23,6 +23,8 @@ tauri-plugin-window-state = "2"
 tauri-plugin-updater = "2"
 # アップデート適用後の再起動に使う。
 tauri-plugin-process = "2"
+# 起動時の更新確認ダイアログ（設定ウィンドウが隠れている通常起動で使う）。
+tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 

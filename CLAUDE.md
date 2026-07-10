@@ -10,7 +10,7 @@ Jira 専用ブラウザ（Site-Specific Browser）。Jira Cloud（`*.atlassian.n
 - **WebView**: WebView2（Windows / Chromium ベース）
 - **設定永続化**: `tauri-plugin-store`
 - **ウィンドウ状態**: `tauri-plugin-window-state`（Jira ウィンドウの位置・サイズ・最大化）
-- **セルフアップデート**: `tauri-plugin-updater`（GitHub Releases の `latest.json` を参照）＋ `tauri-plugin-process`（適用後の再起動）。権限は設定ウィンドウ(`main`)のみ。
+- **セルフアップデート**: `tauri-plugin-updater`（GitHub Releases の `latest.json` を参照）＋ `tauri-plugin-process`（適用後の再起動）。権限は設定ウィンドウ(`main`)のみ。起動時に設定ウィンドウが隠れている（＝Jira 自動オープンの通常起動）場合は更新があれば `tauri-plugin-dialog` のネイティブ確認ダイアログで実行可否を尋ねる。
 - **Win32 連携**: `windows` クレート（Jira ウィンドウのシステムメニュー）
 - **対象 OS**: Windows のみ（クロスプラットフォーム不要）
 
@@ -26,7 +26,7 @@ Jira 専用ブラウザ（Site-Specific Browser）。Jira Cloud（`*.atlassian.n
 ### フロント（`src/`）
 
 - **`App.vue`** — 設定 UI。操作行は「保存して閉じる」(primary) / 「キャンセル」、続けてバージョン表記・GitHub(octocat) リンク・セルフアップデートの「更新を確認」を同じ行に右寄せで並べる。`settings:refresh` イベントで状態追従。
-- **`composables/useUpdater.ts`** — セルフアップデートの状態管理（`check` / `downloadAndInstall` → `relaunch`）。
+- **`composables/useUpdater.ts`** — セルフアップデートの状態管理（`check` / `downloadAndInstall` → `relaunch`）。`App.vue` の `onMounted` で起動時チェックを行い、設定ウィンドウが**非表示**なら更新時にネイティブ確認ダイアログ（`ask`）を出す。表示中はバナーで扱う。
 - **`api.ts`** — `invoke` ラッパ。設定の読み書き・ウィンドウ操作はすべてここ経由。
 - **`types.ts`** — Rust の `Settings`（camelCase）に対応する型。
 - **`styles.css`** — テーマ変数 `--bg` を定義（ライト/ダーク）。フッターのグラデもこれに追従。
@@ -86,7 +86,7 @@ WebView2 のユーザーデータフォルダを `lib.rs` 冒頭の環境変数 
 
 ### Jira ウィンドウにはリモート IPC を与えない（セキュリティ境界）
 
-`capabilities/default.json` の capability は **`main` のみ**にスコープし、Jira ウィンドウ（リモートコンテンツ）には Tauri API/IPC を一切与えない。`updater:default` / `process:default`（セルフアップデート）も同様に `main` 限定で、Jira 側からは更新 API を呼べない。
+`capabilities/default.json` の capability は **`main` のみ**にスコープし、Jira ウィンドウ（リモートコンテンツ）には Tauri API/IPC を一切与えない。`updater:default` / `process:default`（セルフアップデート）、`dialog:allow-ask` / `dialog:allow-message`（起動時の更新確認ダイアログ）も同様に `main` 限定で、Jira 側からは更新 API もダイアログも呼べない。
 
 - 「設定を開く」導線は IPC ではなく **Win32 のシステムメニュー**（`jira.rs` の `sysmenu` モジュール）で実装している。`GetSystemMenu` に項目を追加し、`SetWindowSubclass` で `WM_SYSCOMMAND` を拾って `reveal_settings` を呼ぶ。WM_NCDESTROY でサブクラス解除＋コールバック回収（リークなし）。
 - この境界は維持すること。Jira 側に新しい導線を足す場合も、IPC ではなくネイティブ機構（メニュー等）で。

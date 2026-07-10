@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.6.0] - 2026-07-11
+
+### Features
+
+- **起動時の更新確認ダイアログ**: 2 回目以降の通常起動では Jira ウィンドウだけが開き設定ウィンドウは隠れるため、これまで更新に気づけなかった。起動時に更新チェックを行い、設定ウィンドウが非表示のとき更新があれば `tauri-plugin-dialog` のネイティブ確認ダイアログ（「更新して再起動」/「後で」）で実行可否を尋ねるようにした。設定ウィンドウ表示中（URL 未設定起動・メニューからの再表示）は従来どおりバナーで扱い、二重には出さない。更新の check / downloadAndInstall は既存の `useUpdater` を再利用。dialog の権限（`dialog:allow-ask` / `dialog:allow-message`）は capability の `main` スコープのみで、Jira ウィンドウには与えない（IPC 境界を維持）。
+
 ## [0.5.0] - 2026-07-10
 
 ### Bug Fixes
@@ -82,6 +88,7 @@ Initial release.
 - **設定の永続化** — `tauri-plugin-store` で設定を保存。Jira ウィンドウの位置・サイズ・最大化は `tauri-plugin-window-state` で復元。
 - **設定導線** — リモートコンテンツに IPC を与えないため、Jira ウィンドウのシステムメニュー（Win32）から設定を開く。
 
+[0.6.0]: https://github.com/comlinks/jirapp/releases/tag/v0.6.0
 [0.5.0]: https://github.com/comlinks/jirapp/releases/tag/v0.5.0
 [0.4.0]: https://github.com/comlinks/jirapp/releases/tag/v0.4.0
 [0.3.0]: https://github.com/comlinks/jirapp/releases/tag/v0.3.0

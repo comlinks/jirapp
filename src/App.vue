@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from "vue";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { ask, message } from "@tauri-apps/plugin-dialog";
 import type { Settings } from "./types";
 import {
   applyToJiraWindow,
@@ -112,6 +114,44 @@ async function refreshJiraOpen() {
   }
 }
 
+// 起動時の更新チェック。設定ウィンドウが隠れている（＝Jira 自動オープンでの通常起動）
+// ときは、更新があってもバナーに気づけないため、ネイティブの確認ダイアログを出して
+// 実行可否を尋ねる。表示中のときはバナー任せ（silent チェックのみ）。
+async function maybeCheckUpdateOnStartup() {
+  let hidden = false;
+  try {
+    hidden = !(await getCurrentWindow().isVisible());
+  } catch {
+    /* 可視状態の取得に失敗したら表示扱いにしてバナーに委ねる */
+  }
+  await updater.checkForUpdate({ silent: true });
+  // 表示中、または更新が無い/確認失敗なら何もしない（従来どおりバナーで扱う）。
+  // ここで state.value を直接ナローイングすると後段の "error" 比較が潰れるため boolean 経由。
+  const updateAvailable = updater.state.value === "available";
+  if (!hidden || !updateAvailable) return;
+
+  const yes = await ask(
+    `新しいバージョン v${updater.updateVersion.value} があります。今すぐ更新して再起動しますか？`,
+    {
+      title: "jirapp の更新",
+      kind: "info",
+      okLabel: "更新して再起動",
+      cancelLabel: "後で",
+    },
+  ).catch(() => false);
+  if (!yes) return;
+
+  // downloadAndInstall は成功時に再起動して戻らない。失敗時は state を error にして
+  // 戻る（例外は投げない）ため、隠れた設定ウィンドウの代わりにダイアログで知らせる。
+  await updater.downloadAndInstall();
+  if (updater.state.value === "error") {
+    await message(`更新に失敗しました: ${updater.errorMessage.value}`, {
+      title: "jirapp の更新",
+      kind: "error",
+    }).catch(() => {});
+  }
+}
+
 onMounted(async () => {
   try {
     Object.assign(settings, await getSettings());
@@ -121,9 +161,11 @@ onMounted(async () => {
     loading.value = false;
   }
   await refreshJiraOpen();
-  // 設定ウィンドウを開いたタイミングで更新を自動チェックする（最新版があればバナー表示）。
-  // 自動チェックは silent: 最新・失敗時は静かに idle に戻し、更新ありのときだけ available。
-  updater.checkForUpdate({ silent: true });
+  // 起動時の更新チェック。設定ウィンドウが表示されている場合（URL 未設定での起動や
+  // メニューからの再表示）はバナーで気づけるので silent チェックのみ。2 回目以降の通常
+  // 起動では Jira ウィンドウだけが開き設定ウィンドウは隠れているため、更新があっても
+  // バナーに気づけない。その場合はネイティブの確認ダイアログで更新の実行可否を尋ねる。
+  await maybeCheckUpdateOnStartup();
   // Rust 側（メニューからの再表示・Jira クローズ）からの状態更新通知でボタン表示を追従させる。
   unlisten = await listen("settings:refresh", () => {
     setStatus("");
