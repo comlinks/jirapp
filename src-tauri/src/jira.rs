@@ -37,7 +37,9 @@ pub fn open<R: Runtime>(app: &AppHandle<R>, s: &Settings) -> Result<(), String> 
     let app_for_build = app.clone();
     let settings_for_build = s.clone();
     app.run_on_main_thread(move || {
-        let _ = tx.send(build_jira_window(&app_for_build, &settings_for_build));
+        // ユーザー操作による明示オープンはホーム（設定の jira_url）を開く。
+        let url = settings_for_build.jira_url.clone();
+        let _ = tx.send(build_jira_window(&app_for_build, &settings_for_build, &url));
     })
     .map_err(|e| format!("メインスレッドへのスケジュールに失敗: {e}"))?;
 
@@ -49,12 +51,18 @@ pub fn open<R: Runtime>(app: &AppHandle<R>, s: &Settings) -> Result<(), String> 
 
 /// 実際の Jira ウィンドウ生成。必ずメインスレッド上で呼ぶこと。
 /// 起動時の自動オープン（lib.rs の setup）からも直接呼ぶため crate 公開。
+///
+/// `open_url` は実際に読み込む URL。通常は設定の `s.jira_url`（ホーム）だが、
+/// 起動時は前回終了時の URL を復元するため別 URL が渡されうる。設定値（CSS/JS/
+/// アイドル閾値）は `s` から取る。
 pub(crate) fn build_jira_window<R: Runtime>(
     app: &AppHandle<R>,
     s: &Settings,
+    open_url: &str,
 ) -> Result<(), String> {
     // 呼び出し前に検証済みのこともあるが、生成スレッド上でも同じ検証を通して Url を得る。
-    let parsed = settings::require_jira_url(&s.jira_url)?;
+    // 復元 URL も含め、https + *.atlassian.net の境界をここで必ず担保する。
+    let parsed = settings::require_jira_url(open_url)?;
 
     // 新規ウィンドウ判定で「現在の」登録ホストを参照するためのハンドル。
     // 設定で URL を変更した後（ウィンドウ再生成せず）でも最新の登録ドメインに追従させる。
@@ -113,10 +121,7 @@ pub(crate) fn build_jira_window<R: Runtime>(
         }
     });
 
-    eprintln!(
-        "[jirapp] building jira window for url={}",
-        s.jira_url.trim()
-    );
+    eprintln!("[jirapp] building jira window for url={}", open_url.trim());
     let window = builder.build().map_err(|e| e.to_string())?;
     eprintln!("[jirapp] jira window built ok");
 
@@ -141,6 +146,14 @@ pub(crate) fn build_jira_window<R: Runtime>(
     let app_for_close = app.clone();
     window.on_window_event(move |event| match event {
         WindowEvent::CloseRequested { .. } => {
+            // 次回起動時の復元用に、閉じる直前の表示 URL を保存する。
+            // フィルターは SPA の pushState で URL に載る（フルロードを伴わない）が、
+            // WebView2 の Source はそれにも追従するため webview.url() で現在値を拾える。
+            if let Some(win) = app_for_close.get_webview_window(JIRA_LABEL) {
+                if let Ok(url) = win.url() {
+                    let _ = settings::persist_last_url(&app_for_close, url.as_str());
+                }
+            }
             let settings_visible = app_for_close
                 .get_webview_window("main")
                 .and_then(|w| w.is_visible().ok())
@@ -250,6 +263,23 @@ pub fn apply<R: Runtime>(app: &AppHandle<R>, s: &Settings) -> Result<(), String>
         win.eval(push_config_script(s)).map_err(|e| e.to_string())?;
     }
     Ok(())
+}
+
+/// 起動時に自動オープンする URL を解決する。
+///
+/// 前回終了時に保存した URL（`lastUrl`）があり、それが登録 Jira と同一テナント
+/// （https + 同一ホスト）なら、その URL を復元して「前回の続き」から開く。
+/// フィルター（`?jql=...`）はこの URL に載るため、これで起動ごとのリセットを防ぐ。
+/// 保存が無い・別テナント・不正なら、設定のホーム URL（`s.jira_url`）にフォールバックする。
+pub(crate) fn resolve_startup_url<R: Runtime>(app: &AppHandle<R>, s: &Settings) -> String {
+    if let Some(last) = settings::load_last_url(app) {
+        if let (Ok(last_url), Some(host)) = (tauri::Url::parse(last.trim()), registered_host(app)) {
+            if is_same_tenant_url(&last_url, &host) {
+                return last;
+            }
+        }
+    }
+    s.jira_url.clone()
 }
 
 /// 新規ウィンドウ要求の URL が、登録した Jira と「同一ホスト（同一テナント）」への

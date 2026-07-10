@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.0] - 2026-07-10
+
+### Bug Fixes
+
+- **フィルター設定が起動の度にリセットされる (#20)**: Jira ボードのフィルターは URL（`?jql=...`）に載るが、起動時に常に設定の「ホーム」URL（クエリなし）を開いていたため、前回付けたフィルターが毎回失われていた。Jira ウィンドウを閉じる際に現在表示していた URL を `lastUrl` として保存し、次回起動時に**同一テナント（https + 登録ホストと同一）に限り**復元するようにした（前回の続きから開く）。フィルターは SPA の `pushState` で URL に反映されるが、WebView2 の `Source` はこれにも追従するため、閉じる時に `webview.url()` で現在値を拾える。ホーム URL を変更したときは `lastUrl` を破棄して新しいボードを開く。`lastUrl` は設定 UI に出さない実行時状態として `tauri-plugin-store` に保存する。
+
+### Internal
+
+- 起動時に開く URL の解決を `jira::resolve_startup_url` に集約し、`build_jira_window` は開く URL を引数で受け取る形に変更（ホーム／復元の両方に対応）。
+
 ## [0.4.0] - 2026-06-08
 
 ### Features
@@ -72,6 +82,7 @@ Initial release.
 - **設定の永続化** — `tauri-plugin-store` で設定を保存。Jira ウィンドウの位置・サイズ・最大化は `tauri-plugin-window-state` で復元。
 - **設定導線** — リモートコンテンツに IPC を与えないため、Jira ウィンドウのシステムメニュー（Win32）から設定を開く。
 
+[0.5.0]: https://github.com/comlinks/jirapp/releases/tag/v0.5.0
 [0.4.0]: https://github.com/comlinks/jirapp/releases/tag/v0.4.0
 [0.3.0]: https://github.com/comlinks/jirapp/releases/tag/v0.3.0
 [0.2.0]: https://github.com/comlinks/jirapp/releases/tag/v0.2.0

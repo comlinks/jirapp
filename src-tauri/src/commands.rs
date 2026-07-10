@@ -19,6 +19,12 @@ pub fn save_settings(
     settings: Settings,
 ) -> Result<(), String> {
     settings::validate_jira_url(&settings.jira_url)?;
+    // ホーム URL が変わったら、古い復元先（前回 URL）は破棄する。
+    // 新しく設定したボードではなく前回のボードに戻ってしまうのを防ぐ。
+    let prev = state.snapshot();
+    if prev.jira_url.trim() != settings.jira_url.trim() {
+        settings::clear_last_url(&app);
+    }
     settings::persist_settings(&app, &settings)?;
     state.replace(settings);
     Ok(())

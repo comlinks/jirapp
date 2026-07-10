@@ -80,10 +80,14 @@ pub fn run() {
             //  - URL 設定済み → 保存済み設定で Jira を自動オープン（設定ウィンドウは非表示のまま）。
             if initial.jira_url.trim().is_empty() {
                 commands::show_main(&handle);
-            } else if let Err(e) = jira::build_jira_window(&handle, &initial) {
-                // 自動オープンに失敗（URL 不正など）したら設定ウィンドウを出して修正させる。
-                eprintln!("[jirapp] Jira 自動オープンに失敗: {e}. 設定ウィンドウを表示します");
-                commands::show_main(&handle);
+            } else {
+                // 前回終了時の URL があれば復元（前回の続き＝フィルター維持）。
+                let open_url = jira::resolve_startup_url(&handle, &initial);
+                if let Err(e) = jira::build_jira_window(&handle, &initial, &open_url) {
+                    // 自動オープンに失敗（URL 不正など）したら設定ウィンドウを出して修正させる。
+                    eprintln!("[jirapp] Jira 自動オープンに失敗: {e}. 設定ウィンドウを表示します");
+                    commands::show_main(&handle);
+                }
             }
 
             Ok(())

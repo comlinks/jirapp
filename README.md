@@ -24,6 +24,9 @@ Jira 専用ブラウザ（Site-Specific Browser）。Jira Cloud（`*.atlassian.n
 - **GitHub リンク** — 設定画面の octocat アイコンからリポジトリを既定ブラウザで開く。
 - **セルフアップデート** — GitHub Releases を参照し、新しい署名済みバージョンを
   ダウンロード＆適用して自動再起動（設定画面の「更新を確認」）。
+- **前回の表示を復元** — Jira ウィンドウを閉じたときの URL を保存し、次回起動時に
+  同一テナントなら復元。フィルター（`?jql=...`）は URL に載るため、起動ごとに
+  リセットされず前回の続きから開ける。
 - **設定永続化 / ウィンドウ状態復元** — `tauri-plugin-store` /
   `tauri-plugin-window-state`。
 

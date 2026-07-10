@@ -97,6 +97,35 @@ pub fn persist_settings<R: Runtime>(app: &AppHandle<R>, s: &Settings) -> Result<
     Ok(())
 }
 
+/// 「最後に表示していた Jira URL」を保存する store キー。
+/// これはユーザーが設定する `jira_url`（＝ホーム）とは別管理の実行時状態で、
+/// 設定 UI には出さない。起動時にここへ戻す（前回の続きから開く）ために使う。
+pub const LAST_URL_KEY: &str = "lastUrl";
+
+/// 最後に表示していた Jira URL を読み込む（未保存・型不一致なら None）。
+pub fn load_last_url<R: Runtime>(app: &AppHandle<R>) -> Option<String> {
+    let store = app.store(STORE_PATH).ok()?;
+    let v = store.get(LAST_URL_KEY)?;
+    v.as_str().map(|s| s.to_string())
+}
+
+/// 最後に表示していた Jira URL を永続化する。
+pub fn persist_last_url<R: Runtime>(app: &AppHandle<R>, url: &str) -> Result<(), String> {
+    let store = app.store(STORE_PATH).map_err(|e| e.to_string())?;
+    store.set(LAST_URL_KEY, serde_json::Value::String(url.to_string()));
+    store.save().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// 保存済みの「最後の URL」を破棄する（ホーム URL 変更時などに、古い復元先へ
+/// 戻らないようリセットする）。失敗しても致命的でないため結果は無視する。
+pub fn clear_last_url<R: Runtime>(app: &AppHandle<R>) {
+    if let Ok(store) = app.store(STORE_PATH) {
+        store.delete(LAST_URL_KEY);
+        let _ = store.save();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

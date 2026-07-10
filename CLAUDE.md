@@ -38,18 +38,18 @@ Jira 専用ブラウザ（Site-Specific Browser）。Jira Cloud（`*.atlassian.n
 - **設定ウィンドウ (`main`)**: Vue SPA。`tauri.conf.json` で生成（`visible:false` / `maximizable:false`）。表示は Rust が制御する。
 - **Jira ウィンドウ (`jira`)**: Jira を直接ロードする専用 webview。`jira::build_jira_window` で動的生成。
 
-設定は **Rust 側（`tauri-plugin-store`）が single source of truth**。`AppState(Mutex<Settings>)` はそのメモリキャッシュ。フロントは `invoke` 経由でのみ読み書きする。
+設定は **Rust 側（`tauri-plugin-store`）が single source of truth**。`AppState(Mutex<Settings>)` はそのメモリキャッシュ。フロントは `invoke` 経由でのみ読み書きする。なお store には `Settings`（キー `settings`）とは別に **`lastUrl`**（前回終了時の Jira URL＝起動時の復元先）も持つ。これは設定 UI に出さない実行時状態で、`Settings` には含めない。ホーム URL（`jira_url`）を変更保存すると `lastUrl` は破棄される（`save_settings`）。
 
 ### 起動・表示フロー（`lib.rs` setup ＋ commands）
 
-- 起動時、保存 URL が **空 → 設定ウィンドウを表示** / **設定済み → Jira を自動オープン**（設定ウィンドウは非表示のまま。自動オープン失敗時は設定ウィンドウを表示）。
+- 起動時、保存 URL が **空 → 設定ウィンドウを表示** / **設定済み → Jira を自動オープン**（設定ウィンドウは非表示のまま。自動オープン失敗時は設定ウィンドウを表示）。自動オープンの URL は `jira::resolve_startup_url` が解決し、**前回終了時に保存した URL（`lastUrl`）が同一テナント（https + 登録ホスト一致）なら復元**して「前回の続き」から開く（フィルター `?jql=...` は URL に載るためこれで維持される）。無い／別テナント／不正なら設定のホーム URL（`jira_url`）を開く。
 - フロントの「保存して閉じる」→ 保存後、Jira が開いていれば `apply_to_jira_window`＋`hide_settings_window`、未オープンなら `open_jira_window`（Jira を開いたら設定ウィンドウを `hide`）。
 - 「キャンセル」→ 編集を破棄して `close_settings_window`（Jira があれば `hide`、無ければ `app.exit(0)`＝main ✕ と同じ挙動）。
 - Jira のシステムメニュー「設定を開く」→ `reveal_settings`（main を `show`＋`set_focus`＋`settings:refresh` 発火）。
 - フロントは `is_jira_open` ＋ `settings:refresh` で状態追従する（ボタン自体は常に表示）。
 - **クローズ挙動**:
   - `main` の ✕: Jira が開いていれば閉じず `hide`（＝設定を閉じる扱い）。Jira が無ければ閉じて終了。
-  - `jira` の ✕: 設定ウィンドウが非表示なら `app.exit(0)`（アプリ終了）。`Destroyed` で `settings:refresh` を発火しフロントを更新。
+  - `jira` の ✕: `CloseRequested` で現在の表示 URL を `webview.url()` で取得し `lastUrl` として保存（次回起動の復元用）。その後、設定ウィンドウが非表示なら `app.exit(0)`（アプリ終了）。`Destroyed` で `settings:refresh` を発火しフロントを更新。
 - Jira ウィンドウの位置・サイズ・最大化は `tauri-plugin-window-state` が保存／復元（`main` は denylist で除外）。生成は `visible:false` → `restore_state` → `show` の順で初期位置のちらつきを防ぐ。
 
 ### Tauri コマンド（`generate_handler!`）
