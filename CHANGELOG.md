@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.7.0] - 2026-07-11
+
+### Features
+
+- **カンバン列ヘッダの色変更 (#21)**: Jira ボードの列（ステータス）ヘッダの背景色を変更できるようにした。各列の ⋯（その他の操作）メニューに「色の変更」を追加し、Jira の accent パレット（`--ds-background-accent-*-subtlest`）から選択／クリアできる。色は**ステータス名をキー**に `about:blank` の hidden iframe 経由で native localStorage へ保存し、Jira 側に IPC を与えず永続化する（Atlassian が `window.localStorage` をメモリシムに差し替えるため、シム対象外の native ストアへ iframe 経由で書く）。着色は `data-jirapp-col` 属性＋注入 `<style>` の `!important` で行い、Jira 既定のインライン背景（グレー）には触れないため「クリア」で元に戻る。SPA 遷移・再描画には `MutationObserver` で追従する。
+
+### Internal
+
+- **注入 JS のモジュール分離・プラットフォーム化**: 注入 JS を Rust の生文字列から `src-tauri/src/inject/*.js` に切り出し、`inject.rs` が `include_str!` で取り込む構成に変更（エディタ支援・lint が効く）。基盤 `machinery.js` を `window.JIRAPP` プラットフォーム（`registerFeature` / `store` / `addStyle` / `onConfig`）に整理し、各機能はこれに登録する。document-start 注入は `DOC_START_SCRIPTS` レジストリで一括登録し、新しい JS 拡張は `.js` を 1 枚足して 1 行登録するだけでよい。`jira.rs` はウィンドウ生命周期・URL 解決・システムメニューに専念する構成に整理。
+- **注入 JS の Biome lint を CI に追加**: `biome.json` で `src-tauri/src/inject/*.js` を対象に lint（formatter は無効、lint のみ）。CI に ubuntu の `lint-inject` ジョブ（`biomejs/setup-biome` + `biome lint`）を追加した。フロント（Vue/TS）は従来どおり `npm run build` の型チェックで担保する。
+
 ## [0.6.0] - 2026-07-11
 
 ### Features
@@ -88,6 +99,7 @@ Initial release.
 - **設定の永続化** — `tauri-plugin-store` で設定を保存。Jira ウィンドウの位置・サイズ・最大化は `tauri-plugin-window-state` で復元。
 - **設定導線** — リモートコンテンツに IPC を与えないため、Jira ウィンドウのシステムメニュー（Win32）から設定を開く。
 
+[0.7.0]: https://github.com/comlinks/jirapp/releases/tag/v0.7.0
 [0.6.0]: https://github.com/comlinks/jirapp/releases/tag/v0.6.0
 [0.5.0]: https://github.com/comlinks/jirapp/releases/tag/v0.5.0
 [0.4.0]: https://github.com/comlinks/jirapp/releases/tag/v0.4.0

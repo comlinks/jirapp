@@ -134,17 +134,18 @@ WebView2 のユーザーデータフォルダを `lib.rs` 冒頭の環境変数 
 
 exe 配布は **CI Release（`.github/workflows/release.yml` ／ tauri-action）が主**。`v*` タグの push で起動し、NSIS インストーラ＋セルフアップデート用 `latest.json` をビルドして **下書き** リリースを作成する（`bundle.targets` は `["nsis"]` 固定）。手順:
 
-1. **バージョン bump**（機能変更とは**別コミット**にする。`chore(release)` は bump のみで、範囲外の変更を抱き合わせない）。0.6.0 → 0.7.0 の例で計 6 行:
+1. **`CHANGELOG.md` に該当バージョンの項目を追加**（Keep a Changelog 形式。最新版を先頭に、Features / Internal 等で分類し、末尾のリンク定義も追加）。**`chore(release)` コミットには含めず**、機能コミット側または `docs:` コミットで入れる（`chore(release)` は bump のみに保つ）。
+2. **バージョン bump**（`chore(release)` は bump のみで、範囲外の変更を抱き合わせない）。0.6.0 → 0.7.0 の例で計 6 行:
    - `package.json`（`"version"` 1 箇所）
    - `package-lock.json`（`"version"` 2 箇所＝ルートと `packages[""]`）
    - `src-tauri/Cargo.toml`（`[package]` の `version` 1 箇所）
    - `src-tauri/Cargo.lock`（**`name = "jirapp"` 直下の `version` 1 行のみ**。依存にも同名バージョンが多数あるので全置換しないこと。行番号指定 sed か文脈付き置換で）
    - `src-tauri/tauri.conf.json`（`"version"` 1 箇所）
    - bump 後 `cargo check` で Cargo.toml/Cargo.lock 整合を確認（jirapp のバージョン行以外に lock ドリフトが出ないこと）。
-2. `git commit`（メッセージ `chore(release): X.Y.Z`）→ `git push origin main`（このリポは PR 運用なし＝直接 push）。
-3. `git tag -a vX.Y.Z -m "..."` → `git push origin vX.Y.Z`。これで `release.yml` が起動しビルド → **下書き** リリースが作られる。
-4. **下書きを GitHub で publish**（`updater` エンドポイント `…/releases/latest/download/latest.json` は publish 済みの最新リリースしか解決しない。下書きのままだと更新配信されない）。publish 自体はメンテナが GitHub 上で行う（外部公開なので勝手に publish しない）。
-5. **再リリース**（アセット不足等）: タグを付け替えて `git push --force` でタグ更新すると同一下書きにアセットが追補される（リリース削除は不要）。
+3. `git commit`（メッセージ `chore(release): X.Y.Z`）→ `git push origin main`（このリポは PR 運用なし＝直接 push）。
+4. `git tag -a vX.Y.Z -m "..."` → `git push origin vX.Y.Z`。これで `release.yml` が起動しビルド → **下書き** リリースが作られる。
+5. **ビルド完了を確認して下書きを publish する**: `gh run watch` で Release ワークフローの成功を待ち、アセット（`jirapp_<ver>_x64-setup.exe` と `latest.json`）が添付されていることを確認してから `gh release edit vX.Y.Z --draft=false --latest` で公開する。`updater` エンドポイント `…/releases/latest/download/latest.json` は **publish 済みの最新リリースしか解決しない**ため、publish しないとセルフアップデートが配信されない。publish は外部公開のため、通常は事前承認を得てから実行する。
+6. **再リリース**（アセット不足等）: タグを付け替えて `git push --force` でタグ更新すると同一下書きにアセットが追補される（リリース削除は不要）。
 
 補足・落とし穴:
 - **CI 不調時のローカルビルド（フォールバック）**: `tauri build` は `tauri-winres` が `rc.exe` を要求するため vcvars を読み込んでから実行し、`--bundles nsis` を付ける（`targets:"all"` は MSI が WiX 依存で失敗しやすい）。成果物は `src-tauri/target/release/bundle/nsis/jirapp_<ver>_x64-setup.exe`。詳細は開発メモ `jirapp-release-build` 参照。
