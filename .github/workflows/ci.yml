@@ -51,3 +51,17 @@ jobs:
       - name: cargo test
         working-directory: src-tauri
         run: cargo test
+
+  # Jira へ注入する静的 JS（src-tauri/src/inject/*.js）の Biome lint。
+  # フロント（Vue/TS）は npm run build の型チェック側で担保するため対象外。
+  # 設定は biome.json（includes を inject/*.js に限定・formatter off・lint のみ）。
+  lint-inject:
+    name: Lint injected JS
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: biomejs/setup-biome@v2
+        with:
+          version: 2.4.10
+      - name: Biome lint
+        run: biome lint --error-on-warnings
