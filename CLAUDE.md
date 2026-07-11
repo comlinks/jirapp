@@ -20,7 +20,8 @@ Jira 専用ブラウザ（Site-Specific Browser）。Jira Cloud（`*.atlassian.n
 
 - **`lib.rs`** — `run()`。起動時に `WEBVIEW2_USER_DATA_FOLDER` を設定 → プラグイン登録 → `setup`（設定読込・`AppState` 管理・main ウィンドウのクローズ挙動・起動時分岐）→ `invoke_handler`。
 - **`commands.rs`** — Tauri コマンド群と `reveal_settings`（メニューから設定を表示する共通関数）。
-- **`jira.rs`** — Jira ウィンドウの生成・適用・基盤 JS、`sysmenu` モジュール（システムメニュー）。
+- **`jira.rs`** — Jira ウィンドウの生成・適用・クローズ挙動、URL/テナント解決、`sysmenu` モジュール（システムメニュー）。注入 JS 自体は持たず `inject` に委譲する。
+- **`inject.rs` ＋ `inject/*.js`** — Jira へ注入する JS 資産と配線。`inject/*.js`（`machinery.js`＝基盤プラットフォーム、`column_color.js`＝列着色 等）を `include_str!` で取り込み、`DOC_START_SCRIPTS` に並べて document-start 注入する。設定反映の `push_config_script` / ユーザー JS ラップ `user_js_wrapper` もここ。**新しい JS 拡張機能はここに `.js` を 1 枚足して `DOC_START_SCRIPTS` に 1 行追加するだけ**（後述）。
 - **`settings.rs`** — `Settings` 構造体、store の読み書き（`load_settings` / `persist_settings`）。
 
 ### フロント（`src/`）
@@ -78,11 +79,15 @@ WebView2 のユーザーデータフォルダを `lib.rs` 冒頭の環境変数 
 
 ### JS/CSS 注入
 
-- **基盤処理（アイドル検知・自動リロード・CSS 適用土台）** = `jira.rs` の `MACHINERY_JS` を `initialization_script` でネイティブ注入。CSP の影響を受けにくく、各フルロードの document-start で毎回走る。
-- **ユーザー JS** = 別の `initialization_script` として `try/catch` でラップしネイティブ注入（構文エラーを基盤処理に波及させない）。
-- **ユーザー CSS と設定値** = `push_config_script` を `webview.eval` で流し込む。`on_page_load` の `Finished` 時、および保存時のライブ適用（`apply`）で再注入される。page 側の `window.__JIRAPP_APPLY__` が CSS 適用とリロード再スケジュールを行う。
-- フロントは DOM を直接触らない。注入はすべて Rust 経由。
-- **SPA の注意**: `initialization_script` はフルナビゲーション時のみ再実行され、クライアント側のルート遷移では走らない。遷移に追従させたい JS は `MutationObserver` / `setInterval` で常駐させ、`if (window.__flag__) return;` で多重実行を防ぐ。
+注入 JS は Rust の生文字列ではなく `src-tauri/src/inject/*.js` に置き、`inject.rs` が `include_str!` で取り込む（エディタ支援・lint が効く）。`inject.rs` の `DOC_START_SCRIPTS`（`&[&str]`）に並べた順で document-start にネイティブ注入する。
+
+- **基盤プラットフォーム** = `inject/machinery.js`（`DOC_START_SCRIPTS` の**先頭固定**）。アイドル検知・自動リロード・ユーザー CSS 適用の土台に加え、各機能が乗る `window.JIRAPP` を用意する: `registerFeature(name, fn)`（多重登録ガード＋DOM 準備後に `fn(JIRAPP)` 実行）/ `store.get/set(key, ...)`（iframe 経由 native localStorage 永続化）/ `addStyle(id, css)`（id 付き `<style>`）/ `onConfig(cb)`（Rust からの設定購読）。CSP の影響を受けにくく、各フルロードの document-start で走る。
+- **個別機能** = 例 `inject/column_color.js`（列ヘッダ着色, issue #21）。`JIRAPP.registerFeature("...", function (app) { ... })` の形で基盤に登録し、`app.store` / `app.addStyle` を共有利用する。DOM は `data-testid` で辿り、SPA 追従は各機能内の `MutationObserver` で行う。
+- **新しい JS 拡張機能の足し方**: `inject/<feature>.js` を作って `JIRAPP.registerFeature` で登録し、`inject.rs` の `DOC_START_SCRIPTS` に `include_str!` 定数を 1 行足すだけ。`jira.rs` は触らない。
+- **ユーザー JS** = `inject::user_js_wrapper` で `try/catch` ラップし、基盤・各機能の後に注入（構文エラーを基盤へ波及させない）。
+- **ユーザー CSS と設定値** = `inject::push_config_script` を `webview.eval` で流し込む。`on_page_load` の `Finished` 時、および保存時のライブ適用（`jira::apply`）で再注入される。page 側の `window.__JIRAPP_APPLY__` が CSS 適用とリロード再スケジュール＋`onConfig` 通知を行う。
+- フロントは DOM を直接触らない。注入はすべて Rust（`inject`）経由。
+- **SPA の注意**: `initialization_script` はフルナビゲーション時のみ再実行され、クライアント側のルート遷移では走らない。遷移に追従させたい JS は `MutationObserver` / `setInterval` で常駐させ、多重実行は `registerFeature` の登録ガードで防ぐ。
 
 ### Jira ウィンドウにはリモート IPC を与えない（セキュリティ境界）
 
@@ -93,7 +98,7 @@ WebView2 のユーザーデータフォルダを `lib.rs` 冒頭の環境変数 
 
 ### 自動リロード（アイドル時）
 
-`MACHINERY_JS` 内で `mousemove`/`keydown`/`scroll` 等の最終操作時刻を記録し、設定間隔ごとにアイドル閾値超過を判定して `location.reload()` する。閾値・チェック間隔は設定可能。連続リロード防止に最終操作時刻をリセットする。Jira は SPA なのでフルリロードが重ければ将来内部ビュー更新で代替を検討（現状はフルリロード）。
+`inject/machinery.js` 内で `mousemove`/`keydown`/`scroll` 等の最終操作時刻を記録し、設定間隔ごとにアイドル閾値超過を判定して `location.reload()` する。閾値・チェック間隔は設定可能。連続リロード防止に最終操作時刻をリセットする。Jira は SPA なのでフルリロードが重ければ将来内部ビュー更新で代替を検討（現状はフルリロード）。
 
 ## 制約・注意点
 
@@ -112,11 +117,12 @@ WebView2 のユーザーデータフォルダを `lib.rs` 冒頭の環境変数 
 - ビルド確認（基線＝どちらも警告ゼロで通ること）:
   - `cargo check --manifest-path src-tauri/Cargo.toml`
   - `npm run build`
-- **コミット／リリース前は CI 相当チェックをローカルでも回す**（CI = `.github/workflows/ci.yml` が main への push / PR で `cargo fmt --check` → `cargo clippy --all-targets -- -D warnings` → `cargo test` を順に実行）。`cargo check` / `npm run build` が通っても **`cargo fmt --check` は別物**で、整形漏れがあると CI（lint）だけ赤くなる（実害あり: v0.4.0 で発生）。
+- **コミット／リリース前は CI 相当チェックをローカルでも回す**（CI = `.github/workflows/ci.yml`。`check` ジョブが `cargo fmt --check` → `cargo clippy --all-targets -- -D warnings` → `cargo test`、別ジョブ `lint-inject` が注入 JS の Biome lint を実行）。`cargo check` / `npm run build` が通っても **`cargo fmt --check` は別物**で、整形漏れがあると CI（lint）だけ赤くなる（実害あり: v0.4.0 で発生）。
   - `cargo fmt --manifest-path src-tauri/Cargo.toml --check`（整形だけなら `--check` を外して適用）
   - `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`
   - `cargo test --manifest-path src-tauri/Cargo.toml`
-  - 注意: `clippy` / `tauri build` は `tauri-winres` が `rc.exe` を要求するため、vcvars を読み込んでから実行する（`fmt --check` / `cargo test` は不要）。詳細はリリース手順のメモ参照。
+  - `npx @biomejs/biome@2.4.10 lint --error-on-warnings`（注入 JS `src-tauri/src/inject/*.js` の lint。設定は `biome.json`＝includes を inject/*.js に限定・formatter off・lint のみ。CI は `biomejs/setup-biome` で同版を使う）
+  - 注意: `clippy` / `tauri build` は `tauri-winres` が `rc.exe` を要求するため、vcvars を読み込んでから実行する（`fmt --check` / `cargo test` / Biome は不要）。詳細はリリース手順のメモ参照。
 - 起動: `npm run tauri dev`（`! npm run tauri dev` でこのセッションのログに出せる）。
 - **環境上の注意（過去に実害あり）**:
   - 重要な Write/Edit は **1 つずつ**実行し、長時間のビルドコマンドと同一バッチに混ぜない（並列バッチで書き込み競合・ファイル破損が起きた実績あり）。

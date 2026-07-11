@@ -78,8 +78,6 @@ pub(crate) fn build_jira_window<R: Runtime>(
         // WebView 内の HTML5 ドラッグ&ドロップ（Jira ボードのカード移動など）が
         // ネイティブ側に横取りされて動作しない（Windows の WebView2 で必須）。
         .disable_drag_drop_handler()
-        // 基盤処理（アイドル検知・リロード・CSS 適用土台）はネイティブ注入。CSP の影響を受けにくい。
-        .initialization_script(MACHINERY_JS)
         // 新規ウィンドウ要求（target=_blank / window.open）の扱い。
         //  - 同じ atlassian.net テナント（Confluence 等）→ Allow。WebView2 が
         //    同一環境（＝同一 UDF/セッション）で別ウィンドウのポップアップを開く。
@@ -96,10 +94,17 @@ pub(crate) fn build_jira_window<R: Runtime>(
             }
         });
 
-    // ユーザー JS は別 initialization_script としてネイティブ注入（CSP 非対象）。
+    // 注入機能（基盤プラットフォーム＋各機能）を document-start でネイティブ注入する。
+    // 登録順＝注入順。先頭の MACHINERY_JS が window.JIRAPP を用意し、以降の機能がそれに乗る。
+    // 機能追加は inject::DOC_START_SCRIPTS に 1 行足すだけでよい。
+    for script in crate::inject::DOC_START_SCRIPTS {
+        builder = builder.initialization_script(*script);
+    }
+
+    // ユーザー JS は基盤・各機能の後に注入する（CSP 非対象のネイティブ注入）。
     // 構文エラーがあってもこの script 内に閉じ、基盤処理は壊さない。
     if !s.custom_js.trim().is_empty() {
-        builder = builder.initialization_script(user_js_wrapper(&s.custom_js));
+        builder = builder.initialization_script(crate::inject::user_js_wrapper(&s.custom_js));
     }
 
     // ページロード完了ごとに「現在の」設定（CSS・閾値）を反映する。
@@ -117,7 +122,7 @@ pub(crate) fn build_jira_window<R: Runtime>(
         }
         if let Some(state) = app_for_load.try_state::<AppState>() {
             let current = state.snapshot();
-            let _ = webview.eval(push_config_script(&current));
+            let _ = webview.eval(crate::inject::push_config_script(&current));
         }
     });
 
@@ -260,7 +265,8 @@ mod sysmenu {
 /// ユーザー JS の変更はウィンドウ再オープン時に反映される。
 pub fn apply<R: Runtime>(app: &AppHandle<R>, s: &Settings) -> Result<(), String> {
     if let Some(win) = app.get_webview_window(JIRA_LABEL) {
-        win.eval(push_config_script(s)).map_err(|e| e.to_string())?;
+        win.eval(crate::inject::push_config_script(s))
+            .map_err(|e| e.to_string())?;
     }
     Ok(())
 }
@@ -295,99 +301,6 @@ fn registered_host<R: Runtime>(app: &AppHandle<R>) -> Option<String> {
     let url = tauri::Url::parse(raw.trim()).ok()?;
     url.host_str().map(|h| h.to_string())
 }
-
-/// ユーザー JS をネイティブ注入用にラップする。
-fn user_js_wrapper(js: &str) -> String {
-    format!("try {{\n{js}\n}} catch (e) {{ console.error('[jirapp] user JS error', e); }}")
-}
-
-/// 現在設定を page 側 `__JIRAPP_CONFIG__` に流し込み、適用関数を呼ぶスクリプト。
-fn push_config_script(s: &Settings) -> String {
-    // 文字列は JSON エンコードで安全にエスケープする。
-    let css = serde_json::to_string(&s.custom_css).unwrap_or_else(|_| "\"\"".into());
-    format!(
-        "(function(){{ if (!window.__JIRAPP_APPLY__) return; \
-         window.__JIRAPP_APPLY__({{\
-         autoReloadEnabled:{auto},\
-         idleThresholdSecs:{idle},\
-         reloadCheckIntervalSecs:{interval},\
-         customCss:{css}\
-         }}); }})();",
-        auto = s.auto_reload_enabled,
-        idle = s.idle_threshold_secs,
-        interval = s.reload_check_interval_secs,
-        css = css,
-    )
-}
-
-/// 基盤 JS。アイドル検知・アイドル時自動リロード・CSS 適用の土台を仕込む。
-/// ナビゲーション前に毎回ネイティブ実行される（initialization_script）。
-const MACHINERY_JS: &str = r#"
-(function () {
-  if (window.__JIRAPP_INSTALLED__) return;
-  window.__JIRAPP_INSTALLED__ = true;
-
-  // 既定設定（Rust 側の __JIRAPP_APPLY__ 呼び出しで上書きされる）
-  window.__JIRAPP_CONFIG__ = window.__JIRAPP_CONFIG__ || {
-    autoReloadEnabled: false,
-    idleThresholdSecs: 300,
-    reloadCheckIntervalSecs: 30,
-    customCss: ""
-  };
-
-  // --- アイドル検知: 最後のユーザー操作時刻を記録 ---
-  var lastActivity = Date.now();
-  function touch() { lastActivity = Date.now(); }
-  ["mousemove", "mousedown", "keydown", "scroll", "wheel", "touchstart"].forEach(function (ev) {
-    window.addEventListener(ev, touch, { passive: true, capture: true });
-  });
-
-  // --- アイドル時の自動リロード ---
-  var reloadTimer = null;
-  function scheduleReload() {
-    if (reloadTimer) { clearInterval(reloadTimer); reloadTimer = null; }
-    var cfg = window.__JIRAPP_CONFIG__;
-    if (!cfg.autoReloadEnabled) return;
-    var intervalMs = Math.max(5, cfg.reloadCheckIntervalSecs | 0) * 1000;
-    reloadTimer = setInterval(function () {
-      var c = window.__JIRAPP_CONFIG__;
-      if (!c.autoReloadEnabled) return;
-      var idleMs = Date.now() - lastActivity;
-      if (idleMs >= Math.max(5, c.idleThresholdSecs | 0) * 1000) {
-        lastActivity = Date.now(); // 連続リロード防止
-        location.reload();
-      }
-    }, intervalMs);
-  }
-
-  // --- ユーザー CSS 適用 ---
-  function applyCss(css) {
-    var id = "__jirapp_user_css__";
-    var el = document.getElementById(id);
-    if (!el) {
-      el = document.createElement("style");
-      el.id = id;
-      (document.head || document.documentElement).appendChild(el);
-    }
-    el.textContent = css || "";
-  }
-
-  // 設定適用のエントリポイント（Rust から呼ぶ）
-  window.__JIRAPP_APPLY__ = function (cfg) {
-    if (cfg) window.__JIRAPP_CONFIG__ = cfg;
-    applyCss(window.__JIRAPP_CONFIG__.customCss);
-    scheduleReload();
-  };
-
-  // DOM 準備時に既定設定で一度適用しておく
-  function bootstrap() { window.__JIRAPP_APPLY__(); }
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", bootstrap);
-  } else {
-    bootstrap();
-  }
-})();
-"#;
 
 #[cfg(test)]
 mod tests {

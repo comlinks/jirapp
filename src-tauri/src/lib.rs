@@ -1,4 +1,5 @@
 mod commands;
+mod inject;
 mod jira;
 mod settings;
 
