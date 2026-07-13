@@ -20,10 +20,13 @@ const MACHINERY_JS: &str = include_str!("inject/machinery.js");
 /// 列ヘッダ着色機能（issue #21）。`JIRAPP.registerFeature` で基盤に登録する。
 const COLUMN_COLOR_JS: &str = include_str!("inject/column_color.js");
 
+/// チケットキーのコピー機能（issue #22）。カンバンカードのキー隣にコピーボタンを足す。
+const CARD_KEY_COPY_JS: &str = include_str!("inject/card_key_copy.js");
+
 /// document-start でネイティブ注入するスクリプト群（順序どおり登録される）。
 /// **先頭は必ず `MACHINERY_JS`**（他機能が乗る `window.JIRAPP` を先に用意する）。
 /// 機能追加時はここへ 1 行足すだけでよい。
-pub(crate) const DOC_START_SCRIPTS: &[&str] = &[MACHINERY_JS, COLUMN_COLOR_JS];
+pub(crate) const DOC_START_SCRIPTS: &[&str] = &[MACHINERY_JS, COLUMN_COLOR_JS, CARD_KEY_COPY_JS];
 
 /// ユーザー JS をネイティブ注入用にラップする。構文エラーがあってもこの script 内に閉じ、
 /// 基盤処理へ波及させない。

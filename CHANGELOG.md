@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Features
+
+- **チケットキーのコピー (#22)**: カンバンカードのチケットキー（`COM-123` 等）の隣に、カードをホバーしたとき現れる小さなコピーボタンを追加した。クリックでキー文字列をクリップボードへコピーし、成功を一瞬チェックマークで示す。既存のキーのリンク（クリックでチケットを開く）は残し、その隣に足すだけにしている。ボタンは `navigator.clipboard`（失敗時は `execCommand` フォールバック）でコピーし、SPA の再描画には `MutationObserver` で追従する。注入 JS は `inject/card_key_copy.js` として基盤 `machinery.js` の `JIRAPP.registerFeature` に登録する（`jira.rs` は変更なし）。
+
 ## [0.7.0] - 2026-07-11
 
 ### Features
@@ -99,6 +105,7 @@ Initial release.
 - **設定の永続化** — `tauri-plugin-store` で設定を保存。Jira ウィンドウの位置・サイズ・最大化は `tauri-plugin-window-state` で復元。
 - **設定導線** — リモートコンテンツに IPC を与えないため、Jira ウィンドウのシステムメニュー（Win32）から設定を開く。
 
+[Unreleased]: https://github.com/comlinks/jirapp/compare/v0.7.0...HEAD
 [0.7.0]: https://github.com/comlinks/jirapp/releases/tag/v0.7.0
 [0.6.0]: https://github.com/comlinks/jirapp/releases/tag/v0.6.0
 [0.5.0]: https://github.com/comlinks/jirapp/releases/tag/v0.5.0
