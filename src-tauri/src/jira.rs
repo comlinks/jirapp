@@ -173,7 +173,64 @@ pub(crate) fn build_jira_window<R: Runtime>(
         _ => {}
     });
 
+    // 表示中の URL を随時 `lastUrl` として保存する（issue #24）。
+    // クローズ時保存だけだと、jirapp を終了せず Windows をシャットダウンした場合などに
+    // 最新 URL を取りこぼす。フィルター変更は SPA の pushState で URL に載る（フルロードを
+    // 伴わない）ため on_page_load では拾えず、バックグラウンドのポーリングで変化時に永続化する。
+    spawn_last_url_poll(app);
+
     Ok(())
+}
+
+/// 表示中の Jira URL を定期的に監視し、変化したら `lastUrl` として保存する。
+///
+/// フィルター変更は SPA の pushState で URL に載る（フルロードを伴わない）ため
+/// `on_page_load` では拾えず、`CloseRequested` の保存だけでは、アプリを終了せず OS を
+/// シャットダウンした場合に取りこぼす（issue #24）。そこで軽量なポーリングで
+/// **変化したときだけ** 永続化する（未変化なら store へ書き込まない）。
+///
+/// `webview.url()` は UI スレッド上でのみ安全に呼べるため、読み取りは
+/// `run_on_main_thread` に載せる。ウィンドウが無くなったら（＝クローズ）監視を終える。
+/// アプリ終了時はプロセスごと落ちるためスレッドの後始末は不要。
+fn spawn_last_url_poll<R: Runtime>(app: &AppHandle<R>) {
+    /// 監視間隔。変化時のみ書き込むため、この値による disk への負荷は実質ない。
+    /// シャットダウン時の取りこぼし窓もこの程度に収まる。
+    const POLL_INTERVAL: std::time::Duration = std::time::Duration::from_secs(10);
+
+    let app = app.clone();
+    std::thread::spawn(move || {
+        let mut last_saved: Option<String> = None;
+        loop {
+            std::thread::sleep(POLL_INTERVAL);
+
+            // 現在の表示 URL を UI スレッドで読み取る。
+            let (tx, rx) = std::sync::mpsc::channel::<Option<String>>();
+            let app_for_read = app.clone();
+            if app
+                .run_on_main_thread(move || {
+                    let url = app_for_read
+                        .get_webview_window(JIRA_LABEL)
+                        .and_then(|w| w.url().ok())
+                        .map(|u| u.to_string());
+                    let _ = tx.send(url);
+                })
+                .is_err()
+            {
+                break; // アプリ終了などでスケジュール不可 → 監視終了
+            }
+
+            match rx.recv() {
+                Ok(Some(url)) => {
+                    if last_saved.as_deref() != Some(url.as_str()) {
+                        let _ = settings::persist_last_url(&app, &url);
+                        last_saved = Some(url);
+                    }
+                }
+                Ok(None) => break, // ウィンドウが無くなった（クローズ）→ 監視終了
+                Err(_) => break,   // 送信側が落ちた → 監視終了
+            }
+        }
+    });
 }
 
 /// Jira ウィンドウのシステムメニュー（タイトルバー左上アイコンのメニュー）連携。

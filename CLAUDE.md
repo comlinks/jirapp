@@ -51,6 +51,7 @@ Jira 専用ブラウザ（Site-Specific Browser）。Jira Cloud（`*.atlassian.n
 - **クローズ挙動**:
   - `main` の ✕: Jira が開いていれば閉じず `hide`（＝設定を閉じる扱い）。Jira が無ければ閉じて終了。
   - `jira` の ✕: `CloseRequested` で現在の表示 URL を `webview.url()` で取得し `lastUrl` として保存（次回起動の復元用）。その後、設定ウィンドウが非表示なら `app.exit(0)`（アプリ終了）。`Destroyed` で `settings:refresh` を発火しフロントを更新。
+  - **URL の随時保存（issue #24）**: クローズ時保存だけだと、jirapp を終了せず Windows をシャットダウンした場合などに最新 URL を取りこぼす。フィルター変更は SPA の pushState で URL に載る（フルロードを伴わない）ため `on_page_load` でも拾えない。そこで `build_jira_window` が `spawn_last_url_poll` で表示 URL を 10 秒間隔でポーリングし、**変化したときだけ** `lastUrl` を永続化する（`webview.url()` は UI スレッド必須なので読み取りは `run_on_main_thread` に載せ、ウィンドウが無くなったら監視を終える）。
 - Jira ウィンドウの位置・サイズ・最大化は `tauri-plugin-window-state` が保存／復元（`main` は denylist で除外）。生成は `visible:false` → `restore_state` → `show` の順で初期位置のちらつきを防ぐ。
 
 ### Tauri コマンド（`generate_handler!`）
