@@ -46,7 +46,7 @@ Jira 専用ブラウザ（Site-Specific Browser）。Jira Cloud（`*.atlassian.n
 - 起動時、保存 URL が **空 → 設定ウィンドウを表示** / **設定済み → Jira を自動オープン**（設定ウィンドウは非表示のまま。自動オープン失敗時は設定ウィンドウを表示）。自動オープンの URL は `jira::resolve_startup_url` が解決し、**前回終了時に保存した URL（`lastUrl`）が同一テナント（https + 登録ホスト一致）なら復元**して「前回の続き」から開く（フィルター `?jql=...` は URL に載るためこれで維持される）。無い／別テナント／不正なら設定のホーム URL（`jira_url`）を開く。
 - フロントの「保存して閉じる」→ 保存後、Jira が開いていれば `apply_to_jira_window`＋`hide_settings_window`、未オープンなら `open_jira_window`（Jira を開いたら設定ウィンドウを `hide`）。
 - 「キャンセル」→ 編集を破棄して `close_settings_window`（Jira があれば `hide`、無ければ `app.exit(0)`＝main ✕ と同じ挙動）。
-- Jira のシステムメニュー「設定を開く」→ `reveal_settings`（main を `show`＋`set_focus`＋`settings:refresh` 発火）。
+- Jira のシステムメニュー「設定を開く」→ `reveal_settings`（main を `show`＋`set_focus`＋`settings:refresh` 発火）。「再読み込み」→ `reload_jira`（Jira ウィンドウで `location.reload()`）。F5 でも同じリロードができる（注入 JS）。
 - フロントは `is_jira_open` ＋ `settings:refresh` で状態追従する（ボタン自体は常に表示）。
 - **クローズ挙動**:
   - `main` の ✕: Jira が開いていれば閉じず `hide`（＝設定を閉じる扱い）。Jira が無ければ閉じて終了。
@@ -83,7 +83,7 @@ WebView2 のユーザーデータフォルダを `lib.rs` 冒頭の環境変数 
 注入 JS は Rust の生文字列ではなく `src-tauri/src/inject/*.js` に置き、`inject.rs` が `include_str!` で取り込む（エディタ支援・lint が効く）。`inject.rs` の `DOC_START_SCRIPTS`（`&[&str]`）に並べた順で document-start にネイティブ注入する。
 
 - **基盤プラットフォーム** = `inject/machinery.js`（`DOC_START_SCRIPTS` の**先頭固定**）。アイドル検知・自動リロード・ユーザー CSS 適用の土台に加え、各機能が乗る `window.JIRAPP` を用意する: `registerFeature(name, fn)`（多重登録ガード＋DOM 準備後に `fn(JIRAPP)` 実行）/ `store.get/set(key, ...)`（iframe 経由 native localStorage 永続化）/ `addStyle(id, css)`（id 付き `<style>`）/ `onConfig(cb)`（Rust からの設定購読）。CSP の影響を受けにくく、各フルロードの document-start で走る。
-- **個別機能** = 例 `inject/column_color.js`（列ヘッダ着色, issue #21）。`JIRAPP.registerFeature("...", function (app) { ... })` の形で基盤に登録し、`app.store` / `app.addStyle` を共有利用する。DOM は `data-testid` で辿り、SPA 追従は各機能内の `MutationObserver` で行う。
+- **個別機能** = 例 `inject/column_color.js`（列ヘッダ着色, issue #21）、`inject/card_key_copy.js`（キーのコピー, issue #22）、`inject/reload_shortcut.js`（F5 リロード, issue #25）。`JIRAPP.registerFeature("...", function (app) { ... })` の形で基盤に登録し、`app.store` / `app.addStyle` を共有利用する。DOM は `data-testid` で辿り、SPA 追従は各機能内の `MutationObserver` で行う。
 - **新しい JS 拡張機能の足し方**: `inject/<feature>.js` を作って `JIRAPP.registerFeature` で登録し、`inject.rs` の `DOC_START_SCRIPTS` に `include_str!` 定数を 1 行足すだけ。`jira.rs` は触らない。
 - **ユーザー JS** = `inject::user_js_wrapper` で `try/catch` ラップし、基盤・各機能の後に注入（構文エラーを基盤へ波及させない）。
 - **ユーザー CSS と設定値** = `inject::push_config_script` を `webview.eval` で流し込む。`on_page_load` の `Finished` 時、および保存時のライブ適用（`jira::apply`）で再注入される。page 側の `window.__JIRAPP_APPLY__` が CSS 適用とリロード再スケジュール＋`onConfig` 通知を行う。
@@ -94,7 +94,7 @@ WebView2 のユーザーデータフォルダを `lib.rs` 冒頭の環境変数 
 
 `capabilities/default.json` の capability は **`main` のみ**にスコープし、Jira ウィンドウ（リモートコンテンツ）には Tauri API/IPC を一切与えない。`updater:default` / `process:default`（セルフアップデート）、`dialog:allow-ask` / `dialog:allow-message`（起動時の更新確認ダイアログ）も同様に `main` 限定で、Jira 側からは更新 API もダイアログも呼べない。
 
-- 「設定を開く」導線は IPC ではなく **Win32 のシステムメニュー**（`jira.rs` の `sysmenu` モジュール）で実装している。`GetSystemMenu` に項目を追加し、`SetWindowSubclass` で `WM_SYSCOMMAND` を拾って `reveal_settings` を呼ぶ。WM_NCDESTROY でサブクラス解除＋コールバック回収（リークなし）。
+- 「再読み込み」「設定を開く」導線は IPC ではなく **Win32 のシステムメニュー**（`jira.rs` の `sysmenu` モジュール）で実装している。`GetSystemMenu` に項目を追加し、`SetWindowSubclass` で `WM_SYSCOMMAND` を拾い、コマンド ID で `reload_jira`（`location.reload()` を eval）／`reveal_settings` に分岐する。WM_NCDESTROY でサブクラス解除＋コールバック回収（リークなし）。F5 でのリロードは注入 JS（`inject/reload_shortcut.js`）側で keydown を拾って `location.reload()` する（issue #25）。
 - この境界は維持すること。Jira 側に新しい導線を足す場合も、IPC ではなくネイティブ機構（メニュー等）で。
 
 ### 自動リロード（アイドル時）

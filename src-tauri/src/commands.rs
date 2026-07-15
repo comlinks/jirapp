@@ -143,3 +143,12 @@ pub fn reveal_settings<R: Runtime>(app: &AppHandle<R>) {
     // フロントにボタン表示（設定を閉じる）へ切替えさせる。
     let _ = app.emit("settings:refresh", ());
 }
+
+/// 開いている Jira ウィンドウを再読み込みする（システムメニュー「再読み込み」から呼ぶ）。
+/// リモートコンテンツに IPC を与えない方針を保つため、ホストからの `eval` で
+/// `location.reload()` を実行する（アイドル自動リロード・F5 と同じ経路）。
+pub fn reload_jira<R: Runtime>(app: &AppHandle<R>) {
+    if let Some(win) = app.get_webview_window(jira::JIRA_LABEL) {
+        let _ = win.eval("window.location.reload()");
+    }
+}

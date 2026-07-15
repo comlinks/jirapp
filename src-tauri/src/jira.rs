@@ -139,7 +139,7 @@ pub(crate) fn build_jira_window<R: Runtime>(
     }
     let _ = window.show();
 
-    // 設定を開く導線は、タイトルバー左上アイコンのシステムメニューに追加する。
+    // 再読み込み・設定を開く導線は、タイトルバー左上アイコンのシステムメニューに追加する。
     // リモートコンテンツに Tauri API を与えずに済むよう、Win32 のシステムメニュー＋
     // ウィンドウサブクラスで WM_SYSCOMMAND を拾って実装する（IPC を使わない）。
     #[cfg(windows)]
@@ -236,8 +236,8 @@ fn spawn_last_url_poll<R: Runtime>(app: &AppHandle<R>) {
 /// Jira ウィンドウのシステムメニュー（タイトルバー左上アイコンのメニュー）連携。
 ///
 /// Tauri のメニュー API はメニューバーとして表示されてしまうため、Windows の
-/// システムメニューへ直接「設定を開く」を追加し、`WM_SYSCOMMAND` をウィンドウ
-/// サブクラスで拾って `reveal_settings` を呼ぶ。リモートコンテンツ（Jira）には
+/// システムメニューへ直接「再読み込み」「設定を開く」を追加し、`WM_SYSCOMMAND` を
+/// ウィンドウサブクラスで拾って対応する処理を呼ぶ。リモートコンテンツ（Jira）には
 /// Tauri API/IPC を一切与えないという方針を保ったまま導線を提供できる。
 #[cfg(windows)]
 mod sysmenu {
@@ -251,14 +251,16 @@ mod sysmenu {
 
     /// システムメニュー項目のコマンド ID。WM_SYSCOMMAND では下位 4bit が
     /// システム予約のため 0 にしておき、判定時に 0xFFF0 でマスクする。
-    const IDM_OPEN_SETTINGS: usize = 0x0010;
+    const IDM_RELOAD: usize = 0x0010;
+    const IDM_OPEN_SETTINGS: usize = 0x0020;
     /// サブクラス識別子（このウィンドウに対して一意なら何でもよい）。
     const SUBCLASS_ID: usize = 1;
 
-    /// 設定を開くコールバックの型。UI スレッド上でのみ使うので Send は不要。
-    type Callback = Box<dyn Fn()>;
+    /// メニュー選択時のディスパッチャの型。引数は選ばれた項目のコマンド ID（マスク済み）。
+    /// UI スレッド上でのみ使うので Send は不要。
+    type Callback = Box<dyn Fn(usize)>;
 
-    /// Jira ウィンドウのシステムメニューに「設定を開く」を追加する。
+    /// Jira ウィンドウのシステムメニューに「再読み込み」「設定を開く」を追加する。
     pub fn install<R: Runtime>(window: &tauri::WebviewWindow<R>, app: &AppHandle<R>) {
         let hwnd = match window.hwnd() {
             Ok(h) => h,
@@ -268,18 +270,25 @@ mod sysmenu {
             }
         };
 
-        // クロージャを型消去してサブクラスの参照データ（usize）として持たせる。
-        // ウィンドウ破棄（WM_NCDESTROY）時に回収して drop する。
+        // コマンド ID で分岐するディスパッチャを型消去してサブクラスの参照データ（usize）
+        // として持たせる。ウィンドウ破棄（WM_NCDESTROY）時に回収して drop する。
         let app_for_cb = app.clone();
-        let cb: Callback = Box::new(move || crate::commands::reveal_settings(&app_for_cb));
+        let cb: Callback = Box::new(move |id| match id {
+            IDM_RELOAD => crate::commands::reload_jira(&app_for_cb),
+            IDM_OPEN_SETTINGS => crate::commands::reveal_settings(&app_for_cb),
+            _ => {}
+        });
         let refdata = Box::into_raw(Box::new(cb)) as usize;
 
         unsafe {
             let hmenu = GetSystemMenu(hwnd, false);
             let _ = AppendMenuW(hmenu, MF_SEPARATOR, 0, PCWSTR::null());
+            if let Err(e) = AppendMenuW(hmenu, MF_STRING, IDM_RELOAD, w!("再読み込み")) {
+                eprintln!("[jirapp] システムメニュー項目（再読み込み）の追加に失敗: {e}");
+            }
             if let Err(e) = AppendMenuW(hmenu, MF_STRING, IDM_OPEN_SETTINGS, w!("設定を開く"))
             {
-                eprintln!("[jirapp] システムメニュー項目の追加に失敗: {e}");
+                eprintln!("[jirapp] システムメニュー項目（設定を開く）の追加に失敗: {e}");
             }
             if SetWindowSubclass(hwnd, Some(subclass_proc), SUBCLASS_ID, refdata) == false {
                 eprintln!("[jirapp] ウィンドウサブクラス設定に失敗");
@@ -299,10 +308,10 @@ mod sysmenu {
         refdata: usize,
     ) -> LRESULT {
         match umsg {
-            WM_SYSCOMMAND if (wparam.0 & 0xFFF0) == IDM_OPEN_SETTINGS => {
+            WM_SYSCOMMAND if matches!(wparam.0 & 0xFFF0, IDM_RELOAD | IDM_OPEN_SETTINGS) => {
                 if refdata != 0 {
                     let cb = &*(refdata as *const Callback);
-                    cb();
+                    cb(wparam.0 & 0xFFF0);
                 }
                 return LRESULT(0);
             }

@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Features
 
+- **リロード機能 (#25)**: Jira ウィンドウを手動で再読み込みできるようにした。設定を開く導線と同様にタイトルバー左上のシステムメニューへ「再読み込み」を追加（`WM_SYSCOMMAND` をコマンド ID で分岐し `location.reload()` を eval する。IPC は使わない）。加えてブラウザ系のキー操作に揃えて **F5** でも再読み込みできる（注入 JS `inject/reload_shortcut.js` が keydown を捕捉。WebView2 のアクセラレータキー有効/無効に依らず一貫して効くよう自前で `location.reload()`）。
 - **表示 URL の随時保存 (#24)**: これまで `lastUrl`（次回起動の復元先）は Jira ウィンドウを閉じる時にだけ保存していたため、jirapp を終了せず Windows をシャットダウンした場合などにフィルター変更後の URL を取りこぼしていた。Jira ウィンドウ生成時にバックグラウンドの監視（`spawn_last_url_poll`）を開始し、表示 URL を 10 秒間隔でポーリングして**変化したときだけ** `lastUrl` を永続化するようにした。フィルター変更は SPA の `pushState` で URL に載る（フルロードを伴わない）ため `on_page_load` では拾えないが、ポーリング＋`webview.url()` で追従できる。`webview.url()` は UI スレッド必須のため読み取りは `run_on_main_thread` に載せ、ウィンドウが無くなったら監視を終える。
 - **チケットキーのコピー (#22)**: カンバンカードのチケットキー（`COM-123` 等）の隣に、カードをホバーしたとき現れる小さなコピーボタンを追加した。クリックでキー文字列をクリップボードへコピーし、成功を一瞬チェックマークで示す。既存のキーのリンク（クリックでチケットを開く）は残し、その隣に足すだけにしている。ボタンは `navigator.clipboard`（失敗時は `execCommand` フォールバック）でコピーし、SPA の再描画には `MutationObserver` で追従する。注入 JS は `inject/card_key_copy.js` として基盤 `machinery.js` の `JIRAPP.registerFeature` に登録する（`jira.rs` は変更なし）。
 
