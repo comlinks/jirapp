@@ -1,6 +1,6 @@
 [package]
 name = "jirapp"
-version = "0.7.0"
+version = "0.8.0"
 description = "Jira 専用ブラウザ (Site-Specific Browser) for Jira Cloud"
 authors = ["kanfu"]
 edition = "2021"
