@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-07-15
+
 ### Features
 
 - **リロード機能 (#25)**: Jira ウィンドウを手動で再読み込みできるようにした。設定を開く導線と同様にタイトルバー左上のシステムメニューへ「再読み込み」を追加（`WM_SYSCOMMAND` をコマンド ID で分岐し `location.reload()` を eval する。IPC は使わない）。加えてブラウザ系のキー操作に揃えて **F5** でも再読み込みできる（注入 JS `inject/reload_shortcut.js` が keydown を捕捉。WebView2 のアクセラレータキー有効/無効に依らず一貫して効くよう自前で `location.reload()`）。
@@ -107,7 +109,8 @@ Initial release.
 - **設定の永続化** — `tauri-plugin-store` で設定を保存。Jira ウィンドウの位置・サイズ・最大化は `tauri-plugin-window-state` で復元。
 - **設定導線** — リモートコンテンツに IPC を与えないため、Jira ウィンドウのシステムメニュー（Win32）から設定を開く。
 
-[Unreleased]: https://github.com/comlinks/jirapp/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/comlinks/jirapp/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/comlinks/jirapp/releases/tag/v0.8.0
 [0.7.0]: https://github.com/comlinks/jirapp/releases/tag/v0.7.0
 [0.6.0]: https://github.com/comlinks/jirapp/releases/tag/v0.6.0
 [0.5.0]: https://github.com/comlinks/jirapp/releases/tag/v0.5.0
