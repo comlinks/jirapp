@@ -1,7 +1,7 @@
 {
   "name": "jirapp",
   "private": true,
-  "version": "0.8.0",
+  "version": "0.9.0",
   "type": "module",
   "description": "Jira 専用ブラウザ (Site-Specific Browser) for Jira Cloud",
   "scripts": {
