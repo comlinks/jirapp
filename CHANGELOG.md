@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-07-18
+
+### Features
+
+- **左下フローティングのリロードボタン (#26)**: Jira ウィンドウの左下に、クリックで再読み込みできる小さな円形ボタンを常駐表示するようにした。既存の **F5** ／システムメニュー「再読み込み」と同じフルロード経路（`location.reload()`）で、マウス操作だけで手早くリロードしたい用途向け。既定は控えめな不透明度にし、hover/focus 時に不透明になる（邪魔になりにくい）。色は Atlassian のデザイントークン（`--ds-*`）に追従しライト/ダーク両テーマに馴染む。注入 JS は `inject/reload_button.js` として基盤 `machinery.js` の `JIRAPP.registerFeature` に登録する（`jira.rs` は変更なし）。ボタンは `<body>` 直下に一度だけ置き、万一取り除かれても `MutationObserver`（body 直下のみ監視）で貼り直す。
+
 ## [0.8.0] - 2026-07-15
 
 ### Features
@@ -109,7 +115,8 @@ Initial release.
 - **設定の永続化** — `tauri-plugin-store` で設定を保存。Jira ウィンドウの位置・サイズ・最大化は `tauri-plugin-window-state` で復元。
 - **設定導線** — リモートコンテンツに IPC を与えないため、Jira ウィンドウのシステムメニュー（Win32）から設定を開く。
 
-[Unreleased]: https://github.com/comlinks/jirapp/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/comlinks/jirapp/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/comlinks/jirapp/releases/tag/v0.9.0
 [0.8.0]: https://github.com/comlinks/jirapp/releases/tag/v0.8.0
 [0.7.0]: https://github.com/comlinks/jirapp/releases/tag/v0.7.0
 [0.6.0]: https://github.com/comlinks/jirapp/releases/tag/v0.6.0
