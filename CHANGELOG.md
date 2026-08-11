@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **編集中は自動リロードしない**: アイドル時の自動リロードが、チケットの説明・コメントを入力している最中でも問答無用で走り、書きかけの内容を失っていた。リロード判定時にフォーカス位置を見て、textarea / テキスト系 input / `contenteditable`（Jira の説明・コメント欄は ProseMirror の contenteditable で input でも textarea でもない）にカーソルがあるあいだはリロードを見送るようにした。見送るときは最終操作時刻を更新するので、フォーカスを外した直後に即リロードされることもない（外してから改めてアイドル閾値ぶん放置されたらリロードする）。
+
 ## [0.9.0] - 2026-07-18
 
 ### Features

@@ -123,6 +123,26 @@
     window.addEventListener(ev, touch, { passive: true, capture: true });
   });
 
+  // --- 編集中の判定 ---
+  // チケットの説明・コメント欄などに入力中でも問答無用でリロードすると編集内容が消える。
+  // フォーカスが入力系要素にある間はアイドル計測をリセットし続け、フォーカスを外してから
+  // 改めて閾値ぶん放置されるまでリロードしない（外した直後の即リロードも防ぐ）。
+  var NON_TEXT_INPUT = /^(button|submit|reset|checkbox|radio|file|image|range|color)$/;
+  function isEditing() {
+    var el = document.activeElement;
+    // shadow DOM 内のフォーカスは外からは host 要素にしか見えないので辿る
+    while (el && el.shadowRoot && el.shadowRoot.activeElement) {
+      el = el.shadowRoot.activeElement;
+    }
+    if (!el) return false;
+    // Jira の説明・コメント欄は ProseMirror の contenteditable（input/textarea ではない）
+    if (el.isContentEditable) return true;
+    var tag = el.tagName;
+    if (tag === "TEXTAREA") return true;
+    if (tag === "INPUT") return !NON_TEXT_INPUT.test(String(el.type || "text").toLowerCase());
+    return false;
+  }
+
   // --- アイドル時の自動リロード ---
   var reloadTimer = null;
   function scheduleReload() {
@@ -136,6 +156,10 @@
     reloadTimer = setInterval(function () {
       var c = window.__JIRAPP_CONFIG__;
       if (!c.autoReloadEnabled) return;
+      if (isEditing()) {
+        lastActivity = Date.now();
+        return;
+      }
       if (Date.now() - lastActivity >= Math.max(5, c.idleThresholdSecs | 0) * 1000) {
         lastActivity = Date.now(); // 連続リロード防止
         location.reload();

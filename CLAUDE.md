@@ -99,7 +99,9 @@ WebView2 のユーザーデータフォルダを `lib.rs` 冒頭の環境変数 
 
 ### 自動リロード（アイドル時）
 
-`inject/machinery.js` 内で `mousemove`/`keydown`/`scroll` 等の最終操作時刻を記録し、設定間隔ごとにアイドル閾値超過を判定して `location.reload()` する。閾値・チェック間隔は設定可能。連続リロード防止に最終操作時刻をリセットする。Jira は SPA なのでフルリロードが重ければ将来内部ビュー更新で代替を検討（現状はフルリロード）。
+`inject/machinery.js` 内で `mousemove`/`keydown`/`scroll` 等の最終操作時刻を記録し、設定間隔ごとにアイドル閾値超過を判定して `location.reload()` する。閾値・チェック間隔は設定可能。連続リロード防止に最終操作時刻をリセットする。
+
+- **編集中はスキップする**: 判定時に `isEditing()`（`document.activeElement` が textarea / テキスト系 input / `isContentEditable`。shadow root は `shadowRoot.activeElement` を辿る）が真ならリロードせず、最終操作時刻を更新して見送る。Jira の説明・コメント欄は input/textarea ではなく ProseMirror の contenteditable なので、この判定を外すと本来の目的（編集内容を消さない）を果たせない。最終操作時刻を更新するのは、フォーカスを外した直後に即リロードされるのを防ぐため（外してから改めて閾値ぶん放置されたらリロードする）。Jira は SPA なのでフルリロードが重ければ将来内部ビュー更新で代替を検討（現状はフルリロード）。
 
 ## 制約・注意点
 
