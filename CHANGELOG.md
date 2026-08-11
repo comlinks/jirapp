@@ -7,9 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-08-11
+
 ### Fixed
 
 - **編集中は自動リロードしない**: アイドル時の自動リロードが、チケットの説明・コメントを入力している最中でも問答無用で走り、書きかけの内容を失っていた。リロード判定時にフォーカス位置を見て、textarea / テキスト系 input / `contenteditable`（Jira の説明・コメント欄は ProseMirror の contenteditable で input でも textarea でもない）にカーソルがあるあいだはリロードを見送るようにした。見送るときは最終操作時刻を更新するので、フォーカスを外した直後に即リロードされることもない（外してから改めてアイドル閾値ぶん放置されたらリロードする）。
+
+### Internal
+
+- **依存更新と脆弱性の解消**: Dependabot の更新 10 件（vite 8.2.0 / vue 3.5.40 / vue-tsc 3.3.9 / @vitejs/plugin-vue 6.0.8 / @tauri-apps 各種 / serde 1.0.229 / serde_json 1.0.151 / actions/setup-node 7 ほか）を取り込み、Dependabot アラート 5 件をすべて解消した。npm 側（nanoid・postcss）は vite の更新で解消し、推移的依存で PR が出ない `serde_with` は `cargo update` で 3.22.0 に追従した。あわせて TypeScript は `7.0.x` のみ dependabot の対象外にした（TS 7.0 はネイティブ実装で `typescript/lib/tsc` を公開せず vue-tsc が起動できない。Volar が使える API は 7.1 で安定予定のため 7.1 の PR は受け取る）。
 
 ## [0.9.0] - 2026-07-18
 
@@ -119,7 +125,8 @@ Initial release.
 - **設定の永続化** — `tauri-plugin-store` で設定を保存。Jira ウィンドウの位置・サイズ・最大化は `tauri-plugin-window-state` で復元。
 - **設定導線** — リモートコンテンツに IPC を与えないため、Jira ウィンドウのシステムメニュー（Win32）から設定を開く。
 
-[Unreleased]: https://github.com/comlinks/jirapp/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/comlinks/jirapp/compare/v0.9.1...HEAD
+[0.9.1]: https://github.com/comlinks/jirapp/releases/tag/v0.9.1
 [0.9.0]: https://github.com/comlinks/jirapp/releases/tag/v0.9.0
 [0.8.0]: https://github.com/comlinks/jirapp/releases/tag/v0.8.0
 [0.7.0]: https://github.com/comlinks/jirapp/releases/tag/v0.7.0
