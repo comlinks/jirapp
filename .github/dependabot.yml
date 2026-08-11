@@ -9,6 +9,14 @@ updates:
     cooldown:
       default-days: 7
       semver-major-days: 14
+    ignore:
+      # TypeScript 7.0 はネイティブ (Go) 実装で typescript/lib/tsc を公開しないため、
+      # それを require する vue-tsc (Volar) が起動できない。
+      # Volar が使えるプログラマティック API は TS 7.1 で安定予定なので、
+      # 7.0.x だけを無視して 7.1 の PR は受け取る（CI が可否を判定する）。
+      # 7.1 でもまだ動かなければ 7.1.x をこの一覧に追加する
+      - dependency-name: "typescript"
+        versions: ["7.0.x"]
     groups:
       tauri:
         patterns:
