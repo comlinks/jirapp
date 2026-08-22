@@ -117,16 +117,15 @@ WebView2 のユーザーデータフォルダを `lib.rs` 冒頭の環境変数 
 
 ## 開発ワークフロー
 
-- ビルド確認（基線＝どちらも警告ゼロで通ること）:
-  - `cargo check --manifest-path src-tauri/Cargo.toml`
-  - `npm run build`
-- **コミット／リリース前は CI 相当チェックをローカルでも回す**（CI = `.github/workflows/ci.yml`。`check` ジョブが `cargo fmt --check` → `cargo clippy --all-targets -- -D warnings` → `cargo test`、別ジョブ `lint-inject` が注入 JS の Biome lint を実行）。`cargo check` / `npm run build` が通っても **`cargo fmt --check` は別物**で、整形漏れがあると CI（lint）だけ赤くなる（実害あり: v0.4.0 で発生）。
-  - `cargo fmt --manifest-path src-tauri/Cargo.toml --check`（整形だけなら `--check` を外して適用）
-  - `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`
-  - `cargo test --manifest-path src-tauri/Cargo.toml`
-  - `npx @biomejs/biome@2.4.10 lint --error-on-warnings`（注入 JS `src-tauri/src/inject/*.js` の lint。設定は `biome.json`＝includes を inject/*.js に限定・formatter off・lint のみ。CI は `biomejs/setup-biome` で同版を使う）
-  - 注意: `clippy` / `tauri build` は `tauri-winres` が `rc.exe` を要求するため、vcvars を読み込んでから実行する（`fmt --check` / `cargo test` / Biome は不要）。詳細はリリース手順のメモ参照。
-- 起動: `npm run tauri dev`（`! npm run tauri dev` でこのセッションのログに出せる）。
+開発タスクの入口は `justfile` に集約してある（`just` でレシピ一覧）。CI（`ci.yml` / `security.yml`）も同じレシピを呼ぶので、コマンドを変えるときは justfile 側だけを直せば両方に効く。レシピの実体は npm scripts や cargo に委ねた薄いファサードで、`--manifest-path` は `working-directory` 属性で不要にしてある。
+
+- 起動: `just dev`（`! just dev` でこのセッションのログに出せる）。Vite の dev サーバだけなら `just dev-web`。
+- ビルド確認: `just build`（vue-tsc の型検査 + vite build）。警告ゼロで通ることが基線。
+- **コミット／リリース前は `just check` を回す**。中身は CI の `check` ジョブ + `lint-inject` ジョブと同じ内容・同じ順で、`build` → `fmt-check` → `clippy` → `test` → `lint-inject`。
+  - `build` を先に置くのは `tauri-build` が `frontendDist`（`../dist`）の存在を要求するため。
+  - `npm run build` が通っても **`cargo fmt --check` は別物**で、整形漏れがあると CI だけ赤くなる（実害あり: v0.4.0 で発生）。整形の適用は `just fmt`。
+  - `lint-inject` は注入 JS（`src-tauri/src/inject/*.js`）の Biome lint。設定は `biome.json`（includes を inject/*.js に限定・formatter off・lint のみ）。版は justfile の `biome_version` に一本化してある。
+  - vcvars の読み込みは要らない（2026-08-22 に clippy / `tauri build` とも素の Git Bash で通ることを確認済み）。
 - **環境上の注意（過去に実害あり）**:
   - 重要な Write/Edit は **1 つずつ**実行し、長時間のビルドコマンドと同一バッチに混ぜない（並列バッチで書き込み競合・ファイル破損が起きた実績あり）。
   - ビルド結果はファイルに落として読む（端末出力が時系列で錯綜する）。判断は必ず最新ログで。
@@ -138,20 +137,19 @@ WebView2 のユーザーデータフォルダを `lib.rs` 冒頭の環境変数 
 exe 配布は **CI Release（`.github/workflows/release.yml` ／ tauri-action）が主**。`v*` タグの push で起動し、NSIS インストーラ＋セルフアップデート用 `latest.json` をビルドして **下書き** リリースを作成する（`bundle.targets` は `["nsis"]` 固定）。手順:
 
 1. **`CHANGELOG.md` に該当バージョンの項目を追加**（Keep a Changelog 形式。最新版を先頭に、Features / Internal 等で分類し、末尾のリンク定義も追加）。**`chore(release)` コミットには含めず**、機能コミット側または `docs:` コミットで入れる（`chore(release)` は bump のみに保つ）。
-2. **バージョン bump**（`chore(release)` は bump のみで、範囲外の変更を抱き合わせない）。0.6.0 → 0.7.0 の例で計 6 行:
-   - `package.json`（`"version"` 1 箇所）
-   - `package-lock.json`（`"version"` 2 箇所＝ルートと `packages[""]`）
-   - `src-tauri/Cargo.toml`（`[package]` の `version` 1 箇所）
-   - `src-tauri/Cargo.lock`（**`name = "jirapp"` 直下の `version` 1 行のみ**。依存にも同名バージョンが多数あるので全置換しないこと。行番号指定 sed か文脈付き置換で）
-   - `src-tauri/tauri.conf.json`（`"version"` 1 箇所）
-   - bump 後 `cargo check` で Cargo.toml/Cargo.lock 整合を確認（jirapp のバージョン行以外に lock ドリフトが出ないこと）。
+2. **バージョン bump**（`chore(release)` は bump のみで、範囲外の変更を抱き合わせない）。`just bump X.Y.Z` が 5 ファイルを順に更新する:
+   - `scripts/bump-version.mjs` が `package.json` / `src-tauri/tauri.conf.json` / `src-tauri/Cargo.toml` の version 行を書き換える（各ファイルで該当行が 1 箇所だけであることを確認してから書き、違えば中止する）
+   - `npm install --package-lock-only` が `package-lock.json` を更新する（ルートと `packages[""]` の 2 箇所）
+   - `cargo check` が `src-tauri/Cargo.lock` の `jirapp` の version 行を更新する
+   - lockfile 2 つは手で書かない。特に `Cargo.lock` は依存側にも同名バージョンが並ぶため、全置換すると壊れる。
+   - 実行後 `git diff` で、バージョン行以外の lock ドリフトが出ていないことを確認する。
 3. `git commit`（メッセージ `chore(release): X.Y.Z`）→ `git push origin main`（このリポは PR 運用なし＝直接 push）。
 4. `git tag -a vX.Y.Z -m "..."` → `git push origin vX.Y.Z`。これで `release.yml` が起動しビルド → **下書き** リリースが作られる。
 5. **ビルド完了を確認して下書きを publish する**: `gh run watch` で Release ワークフローの成功を待ち、アセット（`jirapp_<ver>_x64-setup.exe` と `latest.json`）が添付されていることを確認してから `gh release edit vX.Y.Z --draft=false --latest` で公開する。`updater` エンドポイント `…/releases/latest/download/latest.json` は **publish 済みの最新リリースしか解決しない**ため、publish しないとセルフアップデートが配信されない。publish は外部公開のため、通常は事前承認を得てから実行する。
 6. **再リリース**（アセット不足等）: タグを付け替えて `git push --force` でタグ更新すると同一下書きにアセットが追補される（リリース削除は不要）。
 
 補足・落とし穴:
-- **CI 不調時のローカルビルド（フォールバック）**: `tauri build` は `tauri-winres` が `rc.exe` を要求するため vcvars を読み込んでから実行し、`--bundles nsis` を付ける（`targets:"all"` は MSI が WiX 依存で失敗しやすい）。成果物は `src-tauri/target/release/bundle/nsis/jirapp_<ver>_x64-setup.exe`。詳細は開発メモ `jirapp-release-build` 参照。
+- **CI 不調時のローカルビルド（フォールバック）**: `just build-installer`（＝`tauri build --bundles nsis`。`targets:"all"` は MSI が WiX 依存で失敗しやすいので nsis に絞る）。成果物は `src-tauri/target/release/bundle/nsis/jirapp_<ver>_x64-setup.exe`。`latest.json` まで要るときは `TAURI_SIGNING_PRIVATE_KEY` を渡す（無いとインストーラは出来るが署名段でエラーになる）。詳細は開発メモ `jirapp-release-build` 参照。
 - **updater 署名鍵**はコード署名とは別物。秘密鍵は `C:\Users\kanfu\.tauri\jirapp-updater.key`（リポ外・要バックアップ）、CI は Secret `TAURI_SIGNING_PRIVATE_KEY`。`tauri.conf.json` の `bundle.createUpdaterArtifacts: true` が無いと `latest.json` が生成されず tauri-action がスキップする（Release ジョブは success になるので気づきにくい）。
 
 ## 動作確認時のチェック

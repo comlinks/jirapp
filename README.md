@@ -44,18 +44,22 @@ NSIS インストーラ（`jirapp_*_x64-setup.exe`）を取得してインスト
 
 ## 開発
 
+タスクランナーは [just](https://github.com/casey/just)。`just` でレシピ一覧が出ます。
+
 ```powershell
 npm install            # 依存インストール（初回のみ）
-npm run tauri:dev      # 開発起動（dev サーバ + Tauri、ホットリロード）
-npm run tauri build    # リリースビルド（NSIS インストーラ生成）
+just dev               # 開発起動（dev サーバ + Tauri、ホットリロード）
+just check             # コミット前チェック一式（CI と同じ内容・同じ順）
+just build-installer   # リリースビルド（NSIS インストーラ生成）
 ```
 
-- フロントのみの型チェック/ビルド: `npm run build`
-- Rust のみのコンパイル確認: `cd src-tauri; cargo check`
-- Rust テスト / lint: `cd src-tauri; cargo test` / `cargo clippy -- -D warnings`
+- フロントのみの型チェック/ビルド: `just build`（型検査だけなら `just typecheck`）
+- Rust の lint / テスト: `just clippy` / `just test`（整形は `just fmt`、検査は `just fmt-check`）
+- 注入 JS の lint: `just lint-inject`
+- CI（`ci.yml` / `security.yml`）も同じレシピを呼ぶため、コマンドの変更は justfile 側だけで済みます。
 - dev サーバは Vite `1430` / HMR `1431`（他の Tauri アプリの既定 `1420` と衝突回避）。
-- リリースビルドは `rc.exe`（Windows SDK）が必要で、`vcvars64` を読み込んでから
-  `--bundles nsis` で実行する。CI（`v*` タグ push）でも自動ビルドされる。
+- リリースビルドは CI（`v*` タグ push）でも自動実行されます。ローカルで
+  セルフアップデート用の `latest.json` まで作るには `TAURI_SIGNING_PRIVATE_KEY` が必要です。
 
 ## リリース
 

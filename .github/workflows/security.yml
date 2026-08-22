@@ -11,6 +11,7 @@ on:
 permissions:
   contents: read
 
+# 監査コマンドの中身は justfile のレシピ（audit-cargo / audit-npm）に寄せてある。
 jobs:
   cargo-audit:
     name: Cargo Audit
@@ -18,11 +19,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
+      - uses: extractions/setup-just@v4
       - name: Install cargo-audit
         run: cargo install cargo-audit
       - name: Run cargo audit
-        working-directory: src-tauri
-        run: cargo audit
+        run: just audit-cargo
 
   npm-audit:
     name: npm Audit
@@ -33,6 +34,8 @@ jobs:
         with:
           node-version: lts/*
           cache: npm
+      - uses: extractions/setup-just@v4
       - run: npm ci
       # 出荷物（dist）に影響する本番依存のみを対象に、critical のみで失敗させる。
-      - run: npm audit --omit=dev --audit-level=critical
+      - name: Run npm audit
+        run: just audit-npm

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Internal
+
+- **タスクランナーに just を導入 (#44)**：開発タスクの入口が npm scripts・`--manifest-path` 付きの cargo・`npx biome` に分散し、CI が同じコマンドを別途書いていた。`justfile` を置いてレシピを唯一の入口にし（`dev` / `check` / `fmt` / `clippy` / `test` / `lint-inject` / `bump` ほか）、CI（`ci.yml` / `security.yml`）の各ステップもレシピ呼び出しに差し替えた。ステップ名は残してあるので失敗箇所の粒度は変わらない。レシピの実体は npm scripts や cargo に委ねた薄いファサードで、cargo 系は `working-directory` 属性で `--manifest-path` を不要にした。Biome の版は justfile の `biome_version` に一本化し、CI の `biomejs/setup-biome` は廃した。
+- **バージョン bump のスクリプト化 (#44)**：`just bump X.Y.Z` で 5 ファイルを一括更新する。`scripts/bump-version.mjs` が `package.json` / `tauri.conf.json` / `Cargo.toml` を書き換え（各ファイルで該当行が 1 箇所であることを確認してから書き、違えば中止する）、lockfile 2 つは `npm install --package-lock-only` と `cargo check` に再生成させる。手書きだと `Cargo.lock` の依存側に並ぶ同名バージョンを巻き込む危険があった。
+- **vcvars 前提の記述を削除**：`clippy` と `tauri build` が `rc.exe` のために vcvars を要すると CLAUDE.md / README に書いていたが、素の Git Bash で両方とも通ることを確認したため削除した。
+
 ## [0.9.1] - 2026-08-11
 
 ### Fixed

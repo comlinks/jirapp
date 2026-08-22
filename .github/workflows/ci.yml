@@ -9,6 +9,8 @@ on:
 permissions:
   contents: read
 
+# 各ステップの中身は justfile のレシピに寄せてある（ローカルの `just check` と同じ内容・
+# 同じ順）。コマンドを変えるときは justfile 側だけを直せば両方に効く。
 jobs:
   check:
     name: Check & Test
@@ -31,37 +33,38 @@ jobs:
         with:
           workspaces: "./src-tauri -> target"
 
+      - uses: extractions/setup-just@v4
+
       - name: Install frontend dependencies
         run: npm ci
 
       # フロント: TypeScript 型チェック + Vite ビルド。
       # tauri-build が frontendDist (../dist) の存在を要求するため Rust より先に実行する。
       - name: Vue/TypeScript check & build
-        run: npm run build
+        run: just build
 
       - name: cargo fmt --check
-        working-directory: src-tauri
-        run: cargo fmt --check
+        run: just fmt-check
 
       - name: cargo clippy
-        working-directory: src-tauri
-        run: cargo clippy --all-targets -- -D warnings
+        run: just clippy
 
       # Rust: ユニットテスト。
       - name: cargo test
-        working-directory: src-tauri
-        run: cargo test
+        run: just test
 
   # Jira へ注入する静的 JS（src-tauri/src/inject/*.js）の Biome lint。
   # フロント（Vue/TS）は npm run build の型チェック側で担保するため対象外。
   # 設定は biome.json（includes を inject/*.js に限定・formatter off・lint のみ）。
+  # Biome の版は justfile の biome_version に一本化している。
   lint-inject:
     name: Lint injected JS
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: biomejs/setup-biome@v2
+      - uses: actions/setup-node@v7
         with:
-          version: 2.4.10
+          node-version: lts/*
+      - uses: extractions/setup-just@v4
       - name: Biome lint
-        run: biome lint --error-on-warnings
+        run: just lint-inject
