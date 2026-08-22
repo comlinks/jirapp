@@ -115,22 +115,57 @@ WebView2 のユーザーデータフォルダを `lib.rs` 冒頭の環境変数 
 - Vue/TS: Composition API + `<script setup>`。型を明示する。
 - Tauri コマンドは Rust 側に集約し、フロントからは `invoke`（`api.ts`）で呼ぶ。**設定の読み書きは必ず Rust 経由**。
 
+## ドキュメント校正ルール
+
+- **対象**：`README.md` / `CHANGELOG.md`（リリース時に足す節）
+- **対象外**：`CLAUDE.md`（読み手が開発者の密な技術メモ）、英語で書く `SECURITY.md`
+- **手順**
+  1. `just lint-docs`（textlint。preset-ai-writing + preset-ja-technical-writing を npx で取る。リポジトリには入れない）
+  2. `japanese-tech-writing` スキルで、textlint が拾えない空句・冗長・演出・論証を点検する
+- **守る表記規約**
+  - 箇条書きの太字ラベルの区切りは全角コロン（`**用語**：説明`）。半角コロンは `no-ai-list-formatting` に触れる
+  - 地の文と見出しで em ダッシュ（`—`）を使わない
+  - 誇張語（「大幅に」等）と LLM 空句（「重要なのは」「正面から」「多角的」等）を使わない
+- **据え置いてよい指摘**
+  - `no-mix-dearu-desumasu` と、列挙が主因の `sentence-length`
+  - CHANGELOG の過去セクション（出荷済みの記録なので、表記の一括正規化以外は触らない）
+  - 誤検出の常連：UI 名やエスケープシーケンス中のリテラルの `?`、行を折り返した括弧
+
+据え置き分が常に残るため `lint-docs` は `just check` に入れていない。exit 1 をそのまま失敗とみなさず、指摘の中身で判断する。
+
 ## 開発ワークフロー
 
 開発タスクの入口は `justfile` に集約してある（`just` でレシピ一覧）。CI（`ci.yml` / `security.yml`）も同じレシピを呼ぶので、コマンドを変えるときは justfile 側だけを直せば両方に効く。レシピの実体は npm scripts や cargo に委ねた薄いファサードで、`--manifest-path` は `working-directory` 属性で不要にしてある。
 
 - 起動: `just dev`（`! just dev` でこのセッションのログに出せる）。Vite の dev サーバだけなら `just dev-web`。
 - ビルド確認: `just build`（vue-tsc の型検査 + vite build）。警告ゼロで通ることが基線。
-- **コミット／リリース前は `just check` を回す**。中身は CI の `check` ジョブ + `lint-inject` ジョブと同じ内容・同じ順で、`build` → `fmt-check` → `clippy` → `test` → `lint-inject`。
-  - `build` を先に置くのは `tauri-build` が `frontendDist`（`../dist`）の存在を要求するため。
-  - `npm run build` が通っても **`cargo fmt --check` は別物**で、整形漏れがあると CI だけ赤くなる（実害あり: v0.4.0 で発生）。整形の適用は `just fmt`。
-  - `lint-inject` は注入 JS（`src-tauri/src/inject/*.js`）の Biome lint。設定は `biome.json`（includes を inject/*.js に限定・formatter off・lint のみ）。版は justfile の `biome_version` に一本化してある。
-  - vcvars の読み込みは要らない（2026-08-22 に clippy / `tauri build` とも素の Git Bash で通ることを確認済み）。
-- **環境上の注意（過去に実害あり）**:
-  - 重要な Write/Edit は **1 つずつ**実行し、長時間のビルドコマンドと同一バッチに混ぜない（並列バッチで書き込み競合・ファイル破損が起きた実績あり）。
-  - ビルド結果はファイルに落として読む（端末出力が時系列で錯綜する）。判断は必ず最新ログで。
-  - `tauri dev` のファイル監視は逐次編集の合間に再コンパイルを走らせるため、**途中の一時エラーは無視**してよい。最終ビルド結果で判断する。
-  - dev 停止後に `vite(node)` / `jirapp.exe` が孤児化し **ポート 1430 を掴み続ける**ことがある（dev サーバは Vite `1430` / HMR `1431`。pike 等の既定 `1420` との衝突回避のため変更済み）。`Get-NetTCPConnection -LocalPort 1430` で PID 特定 → **PowerShell の `Stop-Process -Id <PID> -Force`** で倒す（bash の `kill` は Windows ネイティブ PID に効かないことがある）。
+
+### コミット前チェック
+
+変更の規模で段を変える。
+
+| 変更の規模 | 実行するもの |
+| --- | --- |
+| ある程度の規模の実装・修正 | `/code-review` → `simplify` → `just check` |
+| 軽微なコード修正 | `simplify` → `just check` |
+| ドキュメントのみ | 「ドキュメント校正ルール」の手順 |
+| バージョン bump のみ | 何も要らない |
+
+順序が要点で、`/code-review`（バグ探索）で挙がったものを直してから `simplify`（再利用・単純化・効率・抽象度の整理）を回す。simplify はバグを探さないので、先に回しても直すべきコードを整えるだけになる。どちらもコードを書き換えるため、**動作確認より前**に実行する（確認するのは適用後のコード）。`/code-review` はユーザーがコマンドを実行する。
+
+`just check` の中身は CI の `check` ジョブ + `lint-inject` ジョブと同じ内容・同じ順で、`build` → `fmt-check` → `clippy` → `test` → `lint-inject`。
+
+- `build` を先に置くのは `tauri-build` が `frontendDist`（`../dist`）の存在を要求するため。
+- `npm run build` が通っても **`cargo fmt --check` は別物**で、整形漏れがあると CI だけ赤くなる（実害あり: v0.4.0 で発生）。整形の適用は `just fmt`。
+- `lint-inject` は注入 JS（`src-tauri/src/inject/*.js`）の Biome lint。設定は `biome.json`（includes を inject/*.js に限定・formatter off・lint のみ）。版は justfile の `biome_version` に一本化してある。
+- vcvars の読み込みは要らない（2026-08-22 に clippy / `tauri build` とも素の Git Bash で通ることを確認済み）。
+
+### 環境上の注意（過去に実害あり）
+
+- 重要な Write/Edit は **1 つずつ**実行し、長時間のビルドコマンドと同一バッチに混ぜない（並列バッチで書き込み競合・ファイル破損が起きた実績あり）。
+- ビルド結果はファイルに落として読む（端末出力が時系列で錯綜する）。判断は必ず最新ログで。
+- `tauri dev` のファイル監視は逐次編集の合間に再コンパイルを走らせるため、**途中の一時エラーは無視**してよい。最終ビルド結果で判断する。
+- dev 停止後に `vite(node)` / `jirapp.exe` が孤児化し **ポート 1430 を掴み続ける**ことがある（dev サーバは Vite `1430` / HMR `1431`。pike 等の既定 `1420` との衝突回避のため変更済み）。`Get-NetTCPConnection -LocalPort 1430` で PID 特定 → **PowerShell の `Stop-Process -Id <PID> -Force`** で倒す（bash の `kill` は Windows ネイティブ PID に効かないことがある）。
 
 ## リリース手順
 

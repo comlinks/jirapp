@@ -69,6 +69,16 @@ lint-inject:
 typecheck:
     npx vue-tsc --noEmit
 
+# 据え置いてよい指摘が常に残るため check には入れない（CLAUDE.md「ドキュメント校正
+# ルール」参照）。textlint はリポジトリには入れず npx で都度取る。
+# 日本語ドキュメント（README / CHANGELOG）の textlint
+lint-docs:
+    npx --yes --package textlint \
+      --package textlint-rule-preset-ai-writing \
+      --package textlint-rule-preset-ja-technical-writing \
+      -- textlint --rule preset-ai-writing --rule preset-ja-technical-writing \
+      README.md CHANGELOG.md
+
 # --- 監査（security ワークフローと同じ内容） ---
 
 # 依存の脆弱性を見る（cargo install cargo-audit が要る）

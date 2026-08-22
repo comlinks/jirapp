@@ -15,36 +15,36 @@ Jira 専用ブラウザ（Site-Specific Browser）。Jira Cloud（`*.atlassian.n
 
 ## 特長
 
-- **セッション独立** — WebView2 のユーザーデータフォルダをアプリ専用に固定し、
+- **セッション独立**：WebView2 のユーザーデータフォルダをアプリ専用に固定し、
   システムの Edge/Chrome とは Cookie・認証を分離。
-- **JS/CSS 注入** — 任意の JS/CSS を Jira 画面に注入（基盤はネイティブ注入で
+- **JS/CSS 注入**：任意の JS/CSS を Jira 画面に注入（基盤はネイティブ注入で
   CSP の影響を受けにくい構成）。
-- **列ヘッダの色分け** — カンバンの列（ステータス）ヘッダの背景色を、列の
+- **列ヘッダの色分け**：カンバンの列（ステータス）ヘッダの背景色を、列の
   ⋯ メニュー「色の変更」から Jira のパレットで設定（ステータス名ごとに
   WebView 内へ永続化）。
-- **アイドル時自動リロード** — 最終操作からの経過でアイドル判定し、設定間隔で
+- **アイドル時自動リロード**：最終操作からの経過でアイドル判定し、設定間隔で
   自動リロード（閾値・間隔は設定可能）。
-- **GitHub リンク** — 設定画面の octocat アイコンからリポジトリを既定ブラウザで開く。
-- **セルフアップデート** — GitHub Releases を参照し、新しい署名済みバージョンを
+- **GitHub リンク**：設定画面の octocat アイコンからリポジトリを既定ブラウザで開く。
+- **セルフアップデート**：GitHub Releases を参照し、新しい署名済みバージョンを
   ダウンロード＆適用して自動再起動（設定画面の「更新を確認」）。通常起動（Jira
   ウィンドウのみ表示）でも起動時に更新を確認し、あればネイティブの確認ダイアログで
   実行可否を尋ねる。
-- **前回の表示を復元** — Jira ウィンドウを閉じたときの URL を保存し、次回起動時に
+- **前回の表示を復元**：Jira ウィンドウを閉じたときの URL を保存し、次回起動時に
   同一テナントなら復元。フィルター（`?jql=...`）は URL に載るため、起動ごとに
   リセットされず前回の続きから開ける。
-- **設定永続化 / ウィンドウ状態復元** — `tauri-plugin-store` /
+- **設定永続化 / ウィンドウ状態復元**：`tauri-plugin-store` /
   `tauri-plugin-window-state`。
 
 ## インストール
 
 [GitHub Releases](https://github.com/comlinks/jirapp/releases/latest) から
 NSIS インストーラ（`jirapp_*_x64-setup.exe`）を取得してインストールします。
-未署名（コード署名なし）のため初回起動時に SmartScreen 警告が出る場合があります
+未署名（コード署名なし）のため初回起動時に SmartScreen 警告が出ることもあります
 （詳細情報 → 実行）。以降の更新はアプリ内のセルフアップデートで取得できます。
 
 ## 開発
 
-タスクランナーは [just](https://github.com/casey/just)。`just` でレシピ一覧が出ます。
+タスクランナーは [just](https://github.com/casey/just)。`just` でレシピ一覧が出る。
 
 ```powershell
 npm install            # 依存インストール（初回のみ）
@@ -56,17 +56,18 @@ just build-installer   # リリースビルド（NSIS インストーラ生成�
 - フロントのみの型チェック/ビルド: `just build`（型検査だけなら `just typecheck`）
 - Rust の lint / テスト: `just clippy` / `just test`（整形は `just fmt`、検査は `just fmt-check`）
 - 注入 JS の lint: `just lint-inject`
-- CI（`ci.yml` / `security.yml`）も同じレシピを呼ぶため、コマンドの変更は justfile 側だけで済みます。
+- 日本語ドキュメントの校正: `just lint-docs`（README / CHANGELOG の textlint）
+- CI（`ci.yml` / `security.yml`）も同じレシピを呼ぶため、コマンドの変更は justfile 側だけで済む。
 - dev サーバは Vite `1430` / HMR `1431`（他の Tauri アプリの既定 `1420` と衝突回避）。
-- リリースビルドは CI（`v*` タグ push）でも自動実行されます。ローカルで
-  セルフアップデート用の `latest.json` まで作るには `TAURI_SIGNING_PRIVATE_KEY` が必要です。
+- リリースビルドは CI（`v*` タグ push）でも自動実行される。ローカルで
+  セルフアップデート用の `latest.json` まで作るには `TAURI_SIGNING_PRIVATE_KEY` が要る。
 
 ## リリース
 
 1. `CHANGELOG.md` に該当バージョンの項目を追加する（Keep a Changelog 形式）。
-2. バージョンを bump する（`package.json` / `package-lock.json` / `src-tauri/Cargo.toml` /
-   `src-tauri/Cargo.lock` の `jirapp` 行 / `src-tauri/tauri.conf.json`）。`chore(release): X.Y.Z`
-   として **bump のみ** でコミットし、`main` に push する。
+2. `just bump X.Y.Z` でバージョンを上げる（`package.json` / `package-lock.json` /
+   `src-tauri/Cargo.toml` / `src-tauri/Cargo.lock` / `src-tauri/tauri.conf.json` の 5 ファイル）。
+   `chore(release): X.Y.Z` として **bump のみ** でコミットし、`main` に push する。
 3. `vX.Y.Z` タグを push すると `release.yml`（tauri-action）が NSIS インストーラと
    セルフアップデート用 `latest.json` をビルドし、**下書き** リリースを作成する。
 4. ビルド成功とアセット添付を確認し、下書きを publish する（セルフアップデートは
@@ -90,28 +91,28 @@ just build-installer   # リリースビルド（NSIS インストーラ生成�
 
 ## ウィンドウ構成
 
-- **設定ウィンドウ (`main`)**: Vue SPA。Jira URL・注入 JS/CSS・アイドル閾値などを編集。
+- **設定ウィンドウ (`main`)**：Vue SPA。Jira URL・注入 JS/CSS・アイドル閾値などを編集。
   操作行は「保存して閉じる」「キャンセル」＋バージョン/GitHub/更新確認。
-- **Jira ウィンドウ (`jira`)**: Jira の web 画面を直接ロードする専用 webview。
+- **Jira ウィンドウ (`jira`)**：Jira の web 画面を直接ロードする専用 webview。
   実行時に `WebviewWindowBuilder` で生成する。
 
 ## 設計上のポイント
 
-- **セッション独立**: `lib.rs` 冒頭で環境変数 `WEBVIEW2_USER_DATA_FOLDER`
+- **セッション独立**：`lib.rs` 冒頭で環境変数 `WEBVIEW2_USER_DATA_FOLDER`
   （`%LOCALAPPDATA%\com.kanfu.jirapp\webview-data`）をアプリ専用パスに固定する。
   WebView2 の制約で 1 プロセス内では UDF を webview ごとに分けられないため、
   個別ウィンドウの `data_directory()` ではなく**全 webview 共通**の env で指定する。
-- **設定の single source of truth**: `tauri-plugin-store`（Rust 側）。フロントは
+- **設定の single source of truth**：`tauri-plugin-store`（Rust 側）。フロントは
   `invoke` 経由でのみ読み書きする。
-- **CSP 対策の注入**: 基盤（アイドル検知・自動リロード・CSS 適用土台）と
+- **CSP 対策の注入**：基盤（アイドル検知・自動リロード・CSS 適用土台）と
   **ユーザー JS** は `initialization_script()` でネイティブ注入。CSS・閾値などの
   ライブ更新は `webview.eval()` で `<style>` 差し替え＋設定反映。
-- **メインスレッドを塞がない**: `open_jira_window` は `async`。WebView2 生成は
+- **メインスレッドを塞がない**：`open_jira_window` は `async`。WebView2 生成は
   `run_on_main_thread` でイベントループ上にスケジュールする（同期生成は白画面化する）。
-- **IPC 境界**: capability は `main` のみにスコープし、Jira ウィンドウ（リモート
+- **IPC 境界**：capability は `main` のみにスコープし、Jira ウィンドウ（リモート
   コンテンツ）には Tauri API/IPC を与えない。「設定を開く」導線は Win32 の
   システムメニューで実装する。
-- **ドラッグ&ドロップ**: Jira ウィンドウは `disable_drag_drop_handler()` を付け、
+- **ドラッグ&ドロップ**：Jira ウィンドウは `disable_drag_drop_handler()` を付け、
   OS の drag-drop ハンドラが Jira ボードの HTML5 D&D を横取りしないようにする。
 
 ## 既知の制約 / 注意点
