@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **ドキュメント校正ルールを規定 (#42)**：README / CHANGELOG を対象に、`just lint-docs`（textlint の preset-ai-writing + preset-ja-technical-writing を npx で取る）と `japanese-tech-writing` スキルの 2 段で見る手順を CLAUDE.md に定めた。守る表記規約（太字ラベルの区切りは全角コロン、em ダッシュと誇張語・LLM 空句を使わない）と、据え置いてよい指摘（`no-mix-dearu-desumasu`、列挙由来の `sentence-length`、CHANGELOG の過去セクション、折り返し括弧の誤検出）も併記している。据え置き分が常に残るため `lint-docs` は `just check` には入れない。
 - **README / CHANGELOG の表記を一括正規化 (#42)**：箇条書きの太字ラベルの区切り 35 箇所（半角コロン）と 14 箇所（em ダッシュ）を全角コロンに揃えた。textlint の指摘は 66 件から 33 件に減り、残りはすべて上の据え置き分になった。
 - **コミット前チェックに code-review と simplify を追加 (#42)**：変更の規模ごとの段を CLAUDE.md に表で定めた。ある程度の規模なら `/code-review` → `simplify` → `just check`、軽微なら `simplify` → `just check`。バグ探索を先に、整理を後に置くのは、simplify がバグを探さないため。どちらもコードを書き換えるので動作確認より前に回す。
+- **CLAUDE.md を棚卸しして `.claude/rules/` に分割 (#43)**：領域別の実装ルールを `rust.md`（Rust とコマンド、`sysmenu`）/ `frontend.md`（Vue と注入 JS、自動リロード）/ `testing.md`（動作確認）に切り出し、`paths` frontmatter を付け、該当ファイルを読んだときだけ読み込まれるようにした。CLAUDE.md は 196 行から 159 行になり、101 行分が条件ロードに移った。残したのは領域をまたぐ設計と、外すと壊れる不変条件（単一 UDF、メインスレッドを塞がない、IPC 境界、実害の記録）。分割に `@import` は使わない。`.claude/rules/` は Claude Code が自動的に読むディレクトリだから。import 記法自体も、正しくは `@import <path>` ではなく `@<path>` と書く。
+- **CLAUDE.md の陳腐化を修正 (#43)**：`inject/reload_button.js`（#26）と `set_settings_height` コマンドが実装済みなのに記載から漏れていた。リポジトリ内の参照パスが実在することも機械的に検査した。
+- **`.claude/rules/` を追跡対象にした (#43)**：グローバル ignore が `.claude/` を除外していたため、リポジトリの `.gitignore` で打ち消した。`settings.local.json` は従来どおり除外する。
 
 ## [0.9.1] - 2026-08-11
 

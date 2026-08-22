@@ -1,43 +1,47 @@
-# CLAUDE.md — jirapp
+# CLAUDE.md（jirapp）
 
 Jira 専用ブラウザ（Site-Specific Browser）。Jira Cloud（`*.atlassian.net`）の web 画面を、システムブラウザから独立したセッションで表示し、任意の JS/CSS 注入とアイドル時自動リロードを行う Windows 向け Tauri v2 アプリ。
 
+## 領域別ルール（`.claude/rules/`）
+
+領域ごとの実装ルールは `.claude/rules/` に分けてある。`paths` frontmatter を付けてあるので、該当ファイルを読んだときに読み込まれる。
+
+| ファイル | 内容 | 読み込まれる条件 |
+| --- | --- | --- |
+| `rust.md` | Rust 実装ルール、Tauri コマンド一覧、`sysmenu` の実装 | `src-tauri/**/*.rs` |
+| `frontend.md` | 設定ウィンドウの Vue/TS、注入 JS の構成と足し方、自動リロード | `src/**`、`src-tauri/src/inject/` |
+| `testing.md` | 動作確認の項目、SSO の確認 | ソースファイル全般 |
+
+このファイル（CLAUDE.md）には、領域をまたぐ設計と、外すと壊れる不変条件だけを置く。
+
 ## 技術スタック
 
-- **フレームワーク**: Tauri v2
-- **バックエンド**: Rust（`src-tauri/`）
-- **フロントエンド**: Vue 3 + TypeScript（Vite）、Composition API + `<script setup>`
-- **WebView**: WebView2（Windows / Chromium ベース）
-- **設定永続化**: `tauri-plugin-store`
-- **ウィンドウ状態**: `tauri-plugin-window-state`（Jira ウィンドウの位置・サイズ・最大化）
-- **セルフアップデート**: `tauri-plugin-updater`（GitHub Releases の `latest.json` を参照）＋ `tauri-plugin-process`（適用後の再起動）。権限は設定ウィンドウ(`main`)のみ。起動時に設定ウィンドウが隠れている（＝Jira 自動オープンの通常起動）場合は更新があれば `tauri-plugin-dialog` のネイティブ確認ダイアログで実行可否を尋ねる。
-- **Win32 連携**: `windows` クレート（Jira ウィンドウのシステムメニュー）
-- **対象 OS**: Windows のみ（クロスプラットフォーム不要）
+- **フレームワーク**：Tauri v2。バックエンドは Rust（`src-tauri/`）、フロントは Vue 3 + TypeScript（Vite）。
+- **WebView**：WebView2（Windows / Chromium ベース）。
+- **対象 OS**：Windows のみ（クロスプラットフォーム不要）。
+- **プラグイン**：`tauri-plugin-store`（設定永続化）、`tauri-plugin-window-state`（Jira ウィンドウの位置・サイズ・最大化）、`tauri-plugin-updater` ＋ `tauri-plugin-process`（セルフアップデートと再起動）、`tauri-plugin-dialog`（起動時の更新確認）。いずれも権限は設定ウィンドウ（`main`）のみ。
+- **Win32 連携**：`windows` クレート（Jira ウィンドウのシステムメニュー）。
 
 ## ソース構成
 
 ### Rust（`src-tauri/src/`）
 
-- **`lib.rs`** — `run()`。起動時に `WEBVIEW2_USER_DATA_FOLDER` を設定 → プラグイン登録 → `setup`（設定読込・`AppState` 管理・main ウィンドウのクローズ挙動・起動時分岐）→ `invoke_handler`。
-- **`commands.rs`** — Tauri コマンド群と `reveal_settings`（メニューから設定を表示する共通関数）。
-- **`jira.rs`** — Jira ウィンドウの生成・適用・クローズ挙動、URL/テナント解決、`sysmenu` モジュール（システムメニュー）。注入 JS 自体は持たず `inject` に委譲する。
-- **`inject.rs` ＋ `inject/*.js`** — Jira へ注入する JS 資産と配線。`inject/*.js`（`machinery.js`＝基盤プラットフォーム、`column_color.js`＝列着色 等）を `include_str!` で取り込み、`DOC_START_SCRIPTS` に並べて document-start 注入する。設定反映の `push_config_script` / ユーザー JS ラップ `user_js_wrapper` もここ。**新しい JS 拡張機能はここに `.js` を 1 枚足して `DOC_START_SCRIPTS` に 1 行追加するだけ**（後述）。
-- **`settings.rs`** — `Settings` 構造体、store の読み書き（`load_settings` / `persist_settings`）。
+- **`lib.rs`**：`run()`。起動時に `WEBVIEW2_USER_DATA_FOLDER` を設定 → プラグイン登録 → `setup`（設定読込・`AppState` 管理・main ウィンドウのクローズ挙動・起動時分岐）→ `invoke_handler`。
+- **`commands.rs`**：Tauri コマンド群と `reveal_settings`（メニューから設定を表示する共通関数）。
+- **`jira.rs`**：Jira ウィンドウの生成・適用・クローズ挙動、URL/テナント解決、`sysmenu` モジュール。注入 JS 自体は持たず `inject` に委譲する。
+- **`inject.rs` ＋ `inject/*.js`**：Jira へ注入する JS 資産と配線。`inject/*.js` を `include_str!` で取り込み、`DOC_START_SCRIPTS` に並べて document-start 注入する。
+- **`settings.rs`**：`Settings` 構造体、store の読み書き（`load_settings` / `persist_settings`）。
 
 ### フロント（`src/`）
 
-- **`App.vue`** — 設定 UI。操作行は「保存して閉じる」(primary) / 「キャンセル」、続けてバージョン表記・GitHub(octocat) リンク・セルフアップデートの「更新を確認」を同じ行に右寄せで並べる。`settings:refresh` イベントで状態追従。
-- **`composables/useUpdater.ts`** — セルフアップデートの状態管理（`check` / `downloadAndInstall` → `relaunch`）。`App.vue` の `onMounted` で起動時チェックを行い、設定ウィンドウが**非表示**なら更新時にネイティブ確認ダイアログ（`ask`）を出す。表示中はバナーで扱う。
-- **`api.ts`** — `invoke` ラッパ。設定の読み書き・ウィンドウ操作はすべてここ経由。
-- **`types.ts`** — Rust の `Settings`（camelCase）に対応する型。
-- **`styles.css`** — テーマ変数 `--bg` を定義（ライト/ダーク）。フッターのグラデもこれに追従。
+`App.vue`（設定 UI）/ `composables/useUpdater.ts`（セルフアップデート）/ `api.ts`（`invoke` ラッパ）/ `types.ts` / `styles.css`。各ファイルの役割は `.claude/rules/frontend.md`。
 
 ## ウィンドウ構成と状態遷移
 
 ウィンドウは 2 系統。
 
-- **設定ウィンドウ (`main`)**: Vue SPA。`tauri.conf.json` で生成（`visible:false` / `maximizable:false`）。表示は Rust が制御する。
-- **Jira ウィンドウ (`jira`)**: Jira を直接ロードする専用 webview。`jira::build_jira_window` で動的生成。
+- **設定ウィンドウ (`main`)**：Vue SPA。`tauri.conf.json` で生成（`visible:false` / `maximizable:false`）。表示は Rust が制御する。
+- **Jira ウィンドウ (`jira`)**：Jira を直接ロードする専用 webview。`jira::build_jira_window` で動的生成。
 
 設定は **Rust 側（`tauri-plugin-store`）が single source of truth**。`AppState(Mutex<Settings>)` はそのメモリキャッシュ。フロントは `invoke` 経由でのみ読み書きする。なお store には `Settings`（キー `settings`）とは別に **`lastUrl`**（前回終了時の Jira URL＝起動時の復元先）も持つ。これは設定 UI に出さない実行時状態で、`Settings` には含めない。ホーム URL（`jira_url`）を変更保存すると `lastUrl` は破棄される（`save_settings`）。
 
@@ -46,19 +50,13 @@ Jira 専用ブラウザ（Site-Specific Browser）。Jira Cloud（`*.atlassian.n
 - 起動時、保存 URL が **空 → 設定ウィンドウを表示** / **設定済み → Jira を自動オープン**（設定ウィンドウは非表示のまま。自動オープン失敗時は設定ウィンドウを表示）。自動オープンの URL は `jira::resolve_startup_url` が解決し、**前回終了時に保存した URL（`lastUrl`）が同一テナント（https + 登録ホスト一致）なら復元**して「前回の続き」から開く（フィルター `?jql=...` は URL に載るためこれで維持される）。無い／別テナント／不正なら設定のホーム URL（`jira_url`）を開く。
 - フロントの「保存して閉じる」→ 保存後、Jira が開いていれば `apply_to_jira_window`＋`hide_settings_window`、未オープンなら `open_jira_window`（Jira を開いたら設定ウィンドウを `hide`）。
 - 「キャンセル」→ 編集を破棄して `close_settings_window`（Jira があれば `hide`、無ければ `app.exit(0)`＝main ✕ と同じ挙動）。
-- Jira のシステムメニュー「設定を開く」→ `reveal_settings`（main を `show`＋`set_focus`＋`settings:refresh` 発火）。「再読み込み」→ `reload_jira`（Jira ウィンドウで `location.reload()`）。F5 でも同じリロードができる（注入 JS）。
+- Jira のシステムメニュー「設定を開く」→ `reveal_settings`（main を `show`＋`set_focus`＋`settings:refresh` 発火）。「再読み込み」→ `reload_jira`。F5 と左下のフローティングボタンでも同じリロードができる（注入 JS）。
 - フロントは `is_jira_open` ＋ `settings:refresh` で状態追従する（ボタン自体は常に表示）。
-- **クローズ挙動**:
-  - `main` の ✕: Jira が開いていれば閉じず `hide`（＝設定を閉じる扱い）。Jira が無ければ閉じて終了。
-  - `jira` の ✕: `CloseRequested` で現在の表示 URL を `webview.url()` で取得し `lastUrl` として保存（次回起動の復元用）。その後、設定ウィンドウが非表示なら `app.exit(0)`（アプリ終了）。`Destroyed` で `settings:refresh` を発火しフロントを更新。
-  - **URL の随時保存（issue #24）**: クローズ時保存だけだと、jirapp を終了せず Windows をシャットダウンした場合などに最新 URL を取りこぼす。フィルター変更は SPA の pushState で URL に載る（フルロードを伴わない）ため `on_page_load` でも拾えない。そこで `build_jira_window` が `spawn_last_url_poll` で表示 URL を 10 秒間隔でポーリングし、**変化したときだけ** `lastUrl` を永続化する（`webview.url()` は UI スレッド必須なので読み取りは `run_on_main_thread` に載せ、ウィンドウが無くなったら監視を終える）。
+- **クローズ挙動**：
+  - `main` の ✕：Jira が開いていれば閉じず `hide`（＝設定を閉じる扱い）。Jira が無ければ閉じて終了。
+  - `jira` の ✕：`CloseRequested` で現在の表示 URL を `webview.url()` で取得し `lastUrl` として保存（次回起動の復元用）。その後、設定ウィンドウが非表示なら `app.exit(0)`（アプリ終了）。`Destroyed` で `settings:refresh` を発火しフロントを更新。
+  - **URL の随時保存（issue #24）**：クローズ時保存だけだと、jirapp を終了せず Windows をシャットダウンした場合などに最新 URL を取りこぼす。フィルター変更は SPA の pushState で URL に載る（フルロードを伴わない）ため `on_page_load` でも拾えない。そこで `build_jira_window` が `spawn_last_url_poll` で表示 URL を 10 秒間隔でポーリングし、**変化したときだけ** `lastUrl` を永続化する（`webview.url()` は UI スレッド必須なので読み取りは `run_on_main_thread` に載せ、ウィンドウが無くなったら監視を終える）。
 - Jira ウィンドウの位置・サイズ・最大化は `tauri-plugin-window-state` が保存／復元（`main` は denylist で除外）。生成は `visible:false` → `restore_state` → `show` の順で初期位置のちらつきを防ぐ。
-
-### Tauri コマンド（`generate_handler!`）
-
-`get_settings` / `save_settings` / `open_jira_window`（**async**）/ `apply_to_jira_window` / `hide_settings_window` / `close_settings_window` / `open_url` / `is_jira_open`。`reveal_settings` はコマンドではなくメニューイベント用の共通関数。
-
-- `open_url` — 既定ブラウザで URL を開く（設定画面の GitHub リンク用）。**http/https のみ許可**し、`explorer.exe` に URL を**引数として**渡す（シェル非経由でインジェクション回避）。
 
 ## 重要な設計方針・ハマりどころ
 
@@ -76,44 +74,17 @@ WebView2 のユーザーデータフォルダを `lib.rs` 冒頭の環境変数 
 
 - 同期コマンドはメインスレッドでイベントループを止める。WebView2 生成はメッセージループが回ることを要するため、**同期のまま `build()` を呼ぶと生成が完了せず白画面・無反応**になる（過去の主要バグ）。
 - 起動時の自動オープン（`setup` 内）は既にメインスレッド上なので `build_jira_window` を直接呼んでよい。逆に **`setup` から `run_on_main_thread`＋`recv` で待つとデッドロック**するので使い分ける。
-- 切り分け用の `eprintln!` ログ（`building` / `built ok` / `page_load`）は残してある。挙動が変なときはまずこのログを見る。
-
-### JS/CSS 注入
-
-注入 JS は Rust の生文字列ではなく `src-tauri/src/inject/*.js` に置き、`inject.rs` が `include_str!` で取り込む（エディタ支援・lint が効く）。`inject.rs` の `DOC_START_SCRIPTS`（`&[&str]`）に並べた順で document-start にネイティブ注入する。
-
-- **基盤プラットフォーム** = `inject/machinery.js`（`DOC_START_SCRIPTS` の**先頭固定**）。アイドル検知・自動リロード・ユーザー CSS 適用の土台に加え、各機能が乗る `window.JIRAPP` を用意する: `registerFeature(name, fn)`（多重登録ガード＋DOM 準備後に `fn(JIRAPP)` 実行）/ `store.get/set(key, ...)`（iframe 経由 native localStorage 永続化）/ `addStyle(id, css)`（id 付き `<style>`）/ `onConfig(cb)`（Rust からの設定購読）。CSP の影響を受けにくく、各フルロードの document-start で走る。
-- **個別機能** = 例 `inject/column_color.js`（列ヘッダ着色, issue #21）、`inject/card_key_copy.js`（キーのコピー, issue #22）、`inject/reload_shortcut.js`（F5 リロード, issue #25）。`JIRAPP.registerFeature("...", function (app) { ... })` の形で基盤に登録し、`app.store` / `app.addStyle` を共有利用する。DOM は `data-testid` で辿り、SPA 追従は各機能内の `MutationObserver` で行う。
-- **新しい JS 拡張機能の足し方**: `inject/<feature>.js` を作って `JIRAPP.registerFeature` で登録し、`inject.rs` の `DOC_START_SCRIPTS` に `include_str!` 定数を 1 行足すだけ。`jira.rs` は触らない。
-- **ユーザー JS** = `inject::user_js_wrapper` で `try/catch` ラップし、基盤・各機能の後に注入（構文エラーを基盤へ波及させない）。
-- **ユーザー CSS と設定値** = `inject::push_config_script` を `webview.eval` で流し込む。`on_page_load` の `Finished` 時、および保存時のライブ適用（`jira::apply`）で再注入される。page 側の `window.__JIRAPP_APPLY__` が CSS 適用とリロード再スケジュール＋`onConfig` 通知を行う。
-- フロントは DOM を直接触らない。注入はすべて Rust（`inject`）経由。
-- **SPA の注意**: `initialization_script` はフルナビゲーション時のみ再実行され、クライアント側のルート遷移では走らない。遷移に追従させたい JS は `MutationObserver` / `setInterval` で常駐させ、多重実行は `registerFeature` の登録ガードで防ぐ。
 
 ### Jira ウィンドウにはリモート IPC を与えない（セキュリティ境界）
 
 `capabilities/default.json` の capability は **`main` のみ**にスコープし、Jira ウィンドウ（リモートコンテンツ）には Tauri API/IPC を一切与えない。`updater:default` / `process:default`（セルフアップデート）、`dialog:allow-ask` / `dialog:allow-message`（起動時の更新確認ダイアログ）も同様に `main` 限定で、Jira 側からは更新 API もダイアログも呼べない。
 
-- 「再読み込み」「設定を開く」導線は IPC ではなく **Win32 のシステムメニュー**（`jira.rs` の `sysmenu` モジュール）で実装している。`GetSystemMenu` に項目を追加し、`SetWindowSubclass` で `WM_SYSCOMMAND` を拾い、コマンド ID で `reload_jira`（`location.reload()` を eval）／`reveal_settings` に分岐する。WM_NCDESTROY でサブクラス解除＋コールバック回収（リークなし）。F5 でのリロードは注入 JS（`inject/reload_shortcut.js`）側で keydown を拾って `location.reload()` する（issue #25）。
+- 「再読み込み」「設定を開く」導線は IPC ではなく **Win32 のシステムメニュー**（`jira.rs` の `sysmenu`）で実装している。実装の詳細は `.claude/rules/rust.md`。
 - この境界は維持すること。Jira 側に新しい導線を足す場合も、IPC ではなくネイティブ機構（メニュー等）で。
 
-### 自動リロード（アイドル時）
+### JS/CSS 注入
 
-`inject/machinery.js` 内で `mousemove`/`keydown`/`scroll` 等の最終操作時刻を記録し、設定間隔ごとにアイドル閾値超過を判定して `location.reload()` する。閾値・チェック間隔は設定可能。連続リロード防止に最終操作時刻をリセットする。
-
-- **編集中はスキップする**: 判定時に `isEditing()`（`document.activeElement` が textarea / テキスト系 input / `isContentEditable`。shadow root は `shadowRoot.activeElement` を辿る）が真ならリロードせず、最終操作時刻を更新して見送る。Jira の説明・コメント欄は input/textarea ではなく ProseMirror の contenteditable なので、この判定を外すと本来の目的（編集内容を消さない）を果たせない。最終操作時刻を更新するのは、フォーカスを外した直後に即リロードされるのを防ぐため（外してから改めて閾値ぶん放置されたらリロードする）。Jira は SPA なのでフルリロードが重ければ将来内部ビュー更新で代替を検討（現状はフルリロード）。
-
-## 制約・注意点
-
-- WebView2 は Chromium ベースだが **Chrome 拡張は使えない**。機能は JS/CSS 注入で代替する前提。
-- 対象は Jira Cloud（`*.atlassian.net`）。Atlassian ログイン / 2FA / 外部 IdP SSO の初回フローが webview 内で完結するか要確認（外部 IdP のポップアップ挙動に注意）。動作確認時、`id.atlassian.com` 経由の SSO→ボード表示まで通ることは確認済み。
-- CSP により DOM 経由の script 注入が弾かれうる。CSP 制約のある処理は `initialization_script` に寄せる。
-
-## コーディング規約
-
-- Rust: 標準的な rustfmt / clippy 準拠。エラーは型で表現し握りつぶさない。`unsafe`（`sysmenu`）はコメントで不変条件を明示する。
-- Vue/TS: Composition API + `<script setup>`。型を明示する。
-- Tauri コマンドは Rust 側に集約し、フロントからは `invoke`（`api.ts`）で呼ぶ。**設定の読み書きは必ず Rust 経由**。
+Jira 画面への機能追加は Chrome 拡張が使えない（WebView2 は Chromium ベースだが拡張非対応）ため、すべて JS/CSS 注入で行う。基盤 `inject/machinery.js` が `window.JIRAPP` プラットフォームを提供し、各機能は `registerFeature` で登録する。**新しい JS 拡張は `.js` を 1 枚足して `DOC_START_SCRIPTS` に 1 行足すだけ**で、`jira.rs` は触らない。詳細は `.claude/rules/frontend.md`。
 
 ## ドキュメント校正ルール
 
@@ -137,8 +108,8 @@ WebView2 のユーザーデータフォルダを `lib.rs` 冒頭の環境変数 
 
 開発タスクの入口は `justfile` に集約してある（`just` でレシピ一覧）。CI（`ci.yml` / `security.yml`）も同じレシピを呼ぶので、コマンドを変えるときは justfile 側だけを直せば両方に効く。レシピの実体は npm scripts や cargo に委ねた薄いファサードで、`--manifest-path` は `working-directory` 属性で不要にしてある。
 
-- 起動: `just dev`（`! just dev` でこのセッションのログに出せる）。Vite の dev サーバだけなら `just dev-web`。
-- ビルド確認: `just build`（vue-tsc の型検査 + vite build）。警告ゼロで通ることが基線。
+- 起動：`just dev`（`! just dev` でこのセッションのログに出せる）。Vite の dev サーバだけなら `just dev-web`。
+- ビルド確認：`just build`（vue-tsc の型検査 + vite build）。警告ゼロで通ることが基線。
 
 ### コミット前チェック
 
@@ -157,7 +128,6 @@ WebView2 のユーザーデータフォルダを `lib.rs` 冒頭の環境変数 
 
 - `build` を先に置くのは `tauri-build` が `frontendDist`（`../dist`）の存在を要求するため。
 - `npm run build` が通っても **`cargo fmt --check` は別物**で、整形漏れがあると CI だけ赤くなる（実害あり: v0.4.0 で発生）。整形の適用は `just fmt`。
-- `lint-inject` は注入 JS（`src-tauri/src/inject/*.js`）の Biome lint。設定は `biome.json`（includes を inject/*.js に限定・formatter off・lint のみ）。版は justfile の `biome_version` に一本化してある。
 - vcvars の読み込みは要らない（2026-08-22 に clippy / `tauri build` とも素の Git Bash で通ることを確認済み）。
 
 ### 環境上の注意（過去に実害あり）
@@ -166,6 +136,7 @@ WebView2 のユーザーデータフォルダを `lib.rs` 冒頭の環境変数 
 - ビルド結果はファイルに落として読む（端末出力が時系列で錯綜する）。判断は必ず最新ログで。
 - `tauri dev` のファイル監視は逐次編集の合間に再コンパイルを走らせるため、**途中の一時エラーは無視**してよい。最終ビルド結果で判断する。
 - dev 停止後に `vite(node)` / `jirapp.exe` が孤児化し **ポート 1430 を掴み続ける**ことがある（dev サーバは Vite `1430` / HMR `1431`。pike 等の既定 `1420` との衝突回避のため変更済み）。`Get-NetTCPConnection -LocalPort 1430` で PID 特定 → **PowerShell の `Stop-Process -Id <PID> -Force`** で倒す（bash の `kill` は Windows ネイティブ PID に効かないことがある）。
+- 日本語を含むファイルを sed / perl で一括置換するとき、置換文字列に全角文字を使うなら `-C` 系フラグを付けない（perl の `-CSD` で二重エンコードして文字化けした実績あり）。バイト単位で置換し、置換後に化けが無いことを確認する。
 
 ## リリース手順
 
@@ -186,11 +157,3 @@ exe 配布は **CI Release（`.github/workflows/release.yml` ／ tauri-action）
 補足・落とし穴:
 - **CI 不調時のローカルビルド（フォールバック）**: `just build-installer`（＝`tauri build --bundles nsis`。`targets:"all"` は MSI が WiX 依存で失敗しやすいので nsis に絞る）。成果物は `src-tauri/target/release/bundle/nsis/jirapp_<ver>_x64-setup.exe`。`latest.json` まで要るときは `TAURI_SIGNING_PRIVATE_KEY` を渡す（無いとインストーラは出来るが署名段でエラーになる）。詳細は開発メモ `jirapp-release-build` 参照。
 - **updater 署名鍵**はコード署名とは別物。秘密鍵は `C:\Users\kanfu\.tauri\jirapp-updater.key`（リポ外・要バックアップ）、CI は Secret `TAURI_SIGNING_PRIVATE_KEY`。`tauri.conf.json` の `bundle.createUpdaterArtifacts: true` が無いと `latest.json` が生成されず tauri-action がスキップする（Release ジョブは success になるので気づきにくい）。
-
-## 動作確認時のチェック
-
-- セッションがシステムブラウザと分離されているか（別アカウントでログインしても干渉しないか）。
-- 注入した JS/CSS が CSP で弾かれていないか（Jira ウィンドウの devtools コンソールでエラー確認。`F12` / `Ctrl+Shift+I` で開ける）。
-- アイドル判定が誤発火していないか（操作中にリロードされない）。
-- 起動分岐・設定の表示/非表示・「保存して閉じる」/「キャンセル」の挙動・Jira クローズ時の終了・ウィンドウ位置復元が想定どおりか。
-- チケットのドラッグ&ドロップが効くか（`disable_drag_drop_handler()` が前提）。「更新を確認」「GitHub リンク」が動くか。

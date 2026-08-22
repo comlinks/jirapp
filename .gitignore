@@ -28,7 +28,13 @@ src-tauri/target
 # tauri-build が capabilities/プラグインから毎ビルド再生成する。追跡しない。
 src-tauri/gen/schemas
 
-# Claude Code のローカル設定（*.local では .local.json にマッチしないため明示）
+# Claude Code。領域別ルール（.claude/rules/）はチームで共有するため追跡する。
+# グローバル ignore（~/.gitignore）が .claude/ を丸ごと除外しているので、ここで打ち消す
+# （親ディレクトリが除外されたままだと配下を再包含できない）。
+!.claude/
+.claude/*
+!.claude/rules/
+# ローカル設定は追跡しない（*.local では .local.json にマッチしないため明示）
 .claude/settings.local.json
 
 # Secrets / credentials（安全網: 誤って作業ツリーに置いても追跡しない）
