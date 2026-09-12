@@ -26,7 +26,7 @@ const CARD_KEY_COPY_JS: &str = include_str!("inject/card_key_copy.js");
 /// F5 リロード機能（issue #25）。ブラウザ系に揃えて F5 で location.reload() する。
 const RELOAD_SHORTCUT_JS: &str = include_str!("inject/reload_shortcut.js");
 
-/// 左下フローティングのリロードボタン（issue #26）。クリックで location.reload() する。
+/// ヘッダ右上のリロードボタン（issue #26、配置は #53）。クリックで location.reload() する。
 const RELOAD_BUTTON_JS: &str = include_str!("inject/reload_button.js");
 
 /// 注入機能の DOM 追従セルフチェック（issue #51）。各機能が `expectDom` で申告したセレクタが

@@ -51,7 +51,7 @@ JIRAPP.registerFeature("selfCheck", function (app) {
 
   app.addStyle(
     "__jirapp_selfcheck_style__",
-    "#" + BANNER_ID + "{position:fixed;left:76px;bottom:16px;z-index:2147483000;max-width:380px;" +
+    "#" + BANNER_ID + "{position:fixed;left:16px;bottom:16px;z-index:2147483000;max-width:380px;" +
     "box-sizing:border-box;padding:10px 12px;border-radius:6px;font-size:12px;line-height:1.5;" +
     "border:1px solid var(--ds-border-warning,#e2b203);color:var(--ds-text,#172b4d);" +
     "background:var(--ds-background-warning,#fff7d6);" +
