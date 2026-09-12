@@ -7,19 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-09-12
+
 ### Changed
 
 - **列のスクロールバーを控えめにした (#52)**：Jira のカンバンが列ごとの縦スクロールになり、OS 既定の太いスクロールバー（幅 15px・矢印ボタン付き・濃いグレー）が常に出ていた。幅 8px の角丸にしたうえで、通常はつまみを透明にし、その列にマウスが乗っているあいだだけ見せるようにした。幅は出し入れせず色だけを変えるので、ホバーのたびにカードが横へずれることはない。既定より 7px 狭いぶん、内容に使える幅も広がる。なお Chromium は `::-webkit-scrollbar` の指定を `:hover` の状態変化では計算し直さないため（`scrollbar-color` を使う書き方でも描画が追従しない）、JS で属性を付け外しし、CSS はその属性で分岐させている。
-- **リロードボタンをヘッダ右上へ移した (#53)**：画面左下に浮かせていた円形ボタンを、Jira のトップナビ右上、「アップグレード」と通知ベルの間に差し込むようにした。ボード上のカードと重ならず、他のヘッダ操作と同じ場所に並ぶ。大きさ（32px）と角丸・アイコン（16px）は隣のアイコンボタンに合わせ、色は Atlassian のデザイントークンで組んでライト/ダーク両テーマに追従させている。差し込み先は通知の項目の直前で、「アップグレード」が後から非同期に現れる場面では React が我々のノードを飛ばして挿入するため、毎回位置を見て、ずれていれば入れ直す。差し込み先が見つからないときはボタンを出さず、`expectDom` の申告からセルフチェックが知らせる（リロードは **F5** とシステムメニュー「再読み込み」でもできる）。
+- **リロードボタンをヘッダ右上へ移した (#53)**：画面左下に浮かせていた円形ボタンを、Jira のトップナビ右上へ移した。位置は「アップグレード」と通知ベルの間。ボード上のカードと重ならず、他のヘッダ操作と同じ場所に並ぶ。大きさ（32px）と角丸・アイコン（16px）は隣のアイコンボタンに合わせ、色は Atlassian のデザイントークンで組んでライト/ダーク両テーマに追従させている。差し込み先は通知の項目の直前で、「アップグレード」が後から非同期に現れる場面では React が管理外である自前のノードを飛ばして挿入するため、毎回位置を見て、ずれていれば入れ直す。差し込み先が見つからないときはボタンを出さず、`expectDom` の申告からセルフチェックが知らせる（リロードは **F5** とシステムメニュー「再読み込み」でもできる）。
 
 ### Fixed
 
 - **Jira の画面刷新に追従 (#51)**：Jira Cloud がカンバンの実装を入れ替え、依存していた `data-testid` が `platform-board-kit.*` / `software-board.*` から `board.content.*` へ総入れ替えになったため、列ヘッダの着色（#21）とチケットキーのコピー（#22）がどちらも効かなくなっていた。新しい DOM に合わせて selector を引き直した。列の ⋯ とカードのキーは testid を失ったので、前者はヘッダ内の `button[aria-haspopup="true"]`、後者はカード内の `/browse/` リンクのうち表示文字列を持つものを目印にしている（aria-label は locale 依存なので使わない）。列メニューの同定は、⋯ に付く `aria-controls` の先を辿る形にした。あわせて、刷新後のカードは中身が `pointer-events:none` でオーバーレイのリンクにクリックを集約する造りになったため、コピーボタンに `pointer-events:auto` を明示している。
-- **子フレームで注入 JS が入れ子に増殖していた**：document-start 注入は子フレームでも走る。`JIRAPP.store` が native localStorage を得るために作る about:blank の隠し iframe もその一つで、そこで機能を組み立てると `store` がまた iframe を作り、際限なく入れ子になって `RangeError: Maximum call stack size exceeded` を投げていた。最上位の動作自体は例外を握り潰して続いていたが、リロードのたびに例外が積まれていた。`machinery.js` を最上位の文書でだけ動かすようにした。
+- **子フレームで注入 JS が入れ子に増殖していた**：document-start 注入は子フレームでも走る。`JIRAPP.store` が native localStorage を得るために作る about:blank の隠し iframe もそのひとつで、そこで機能を組み立てると `store` がまた iframe を作り、際限なく入れ子になって `RangeError: Maximum call stack size exceeded` を投げていた。最上位の動作自体は例外を握り潰して続いていたが、リロードのたびに例外が積まれていた。`machinery.js` を最上位の文書でだけ動かすようにした。
 
 ### Features
 
-- **注入機能の DOM 追従セルフチェック (#51)**：Jira の画面が変わって注入機能が効かなくなったとき、黙って壊れたままにならないようにした。各機能が `JIRAPP.expectDom` で依存 DOM を申告し、`inject/selfcheck.js` がボード画面で定期的に点検する。描画待ちの猶予を過ぎても当たらない selector があれば、画面隅に通知を出して `console.warn` に残す。カードのように 0 件がありうるものは gate selector で対象外を判別し、誤報を出さないようにしてある。CI での定期チェックは見送った。ボードの DOM は認証後の SPA でしか得られず、CI から取るには Atlassian の認証情報を CI シークレットに置くことになるうえ、Atlassian の UI 変更はテナント単位の段階配信なので別テナントで見張っても自分のテナントの変化を検知できないため。
+- **注入機能の DOM 追従セルフチェック (#51)**：Jira の画面が変わって注入機能が効かなくなったとき、黙って壊れたままになるのを防ぐ。各機能が `JIRAPP.expectDom` で依存 DOM を申告し、`inject/selfcheck.js` がボード画面で定期的に点検する。描画待ちの猶予を過ぎても当たらない selector があれば、画面隅に通知を出して `console.warn` に残す。カードのように 0 件がありうるものは gate selector で対象外を判別し、誤報を防いでいる。CI での定期チェックは見送った。ボードの DOM は認証後の SPA でしか得られず、CI から取るには Atlassian の認証情報を CI シークレットへ置くことになる。加えて Atlassian の UI 変更はテナント単位の段階配信なので、別テナントで見張っても自分のテナントの変化は検知できない。
 
 ### Internal
 
@@ -153,7 +155,8 @@ Initial release.
 - **設定の永続化**：`tauri-plugin-store` で設定を保存。Jira ウィンドウの位置・サイズ・最大化は `tauri-plugin-window-state` で復元。
 - **設定導線**：リモートコンテンツに IPC を与えないため、Jira ウィンドウのシステムメニュー（Win32）から設定を開く。
 
-[Unreleased]: https://github.com/comlinks/jirapp/compare/v0.9.1...HEAD
+[Unreleased]: https://github.com/comlinks/jirapp/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/comlinks/jirapp/releases/tag/v0.10.0
 [0.9.1]: https://github.com/comlinks/jirapp/releases/tag/v0.9.1
 [0.9.0]: https://github.com/comlinks/jirapp/releases/tag/v0.9.0
 [0.8.0]: https://github.com/comlinks/jirapp/releases/tag/v0.8.0
