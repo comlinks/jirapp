@@ -3,25 +3,39 @@
 // コピーする。基盤 machinery.js の window.JIRAPP プラットフォームに registerFeature で登録し、
 // addStyle を共有利用する（永続状態は持たないので store は使わない）。
 //
-// 設計の要点（実機 DOM を devtools で確認済み。詳細は開発メモ jira-card-key-copy-dom 参照）:
-//  - キー要素: data-testid="platform-card.common.ui.key.key"（中に /browse/KEY への <a target=_blank>）。
-//    既存リンク（クリックでチケットを開く）は壊さず、その隣にボタンを足すだけにする。
-//  - 配置: キーの grid 列は content 幅に固定されるため、ボタンを inline で足すと折り返す。
-//    キー div を position:relative にし、ボタンを position:absolute; left:100% でテキスト右へ
-//    浮かせる（レイアウト非破壊）。ボタンは <a> の外に置くのでリンク遷移は誘発しない。
-//  - クリップ回避（重要）: キー div は Jira 側スタイルで overflow:hidden。left:100% のボタンは
-//    キーの箱の外側に出るため、そのままだと opacity に関係なく切り取られて不可視になる（実機で
-//    「ホバーしても出ない」の真因）。`overflow:visible !important` で上書きして表示させる（非
-//    important では Jira 側に負けるため !important 必須。キー列は content 幅なので副作用はない）。
-//  - 表示: 既定 opacity:0。カードラッパ card-with-icc の :hover でのみ表示（キーボード focus でも）。
+// 対象 DOM は 2026-09 のボード刷新（issue #51）で入れ替わった。旧実装が使っていた
+// platform-card.common.ui.key.key / software-board.*.card-with-icc の testid は消えている。
+//
+// 設計の要点（実機 DOM を CDP で確認済み。詳細は開発メモ jira-card-key-copy-dom 参照）:
+//  - カード: data-testid="board.content.cell.card"。
+//  - キー要素: 刷新後のキーには testid が無い。カード内の /browse/ リンクのうち、表示文字列を
+//    持つものがキー（もう 1 本ある同 href のリンクはカード全体を覆う position:absolute の
+//    オーバーレイで、テキストを持たない）。実機の全カードでこの条件は 1 本だけに一致した。
+//  - 配置: キーの箱（リンクの親 div）は刷新後、キー文字列より広いブロック（実測 175px に対し
+//    キーは 52px）になった。旧実装のように position:absolute; left:100% で浮かせると箱の右端＝
+//    担当者アバターの裏へ回り込んでしまうため、リンクの直後へインラインで置く。箱は
+//    white-space:nowrap にして、ボタンが次行へ落ちないようにする。ボタンは <a> の外なので
+//    リンク遷移は誘発しない。
+//  - クリップ回避（重要）: キーの箱は Jira 側スタイルで overflow:hidden（刷新後も同じ）。
+//    箱に収まりきらない場合にボタンが切り取られるため、`overflow:visible !important` で上書き
+//    する（非 important では Jira 側に負けるため !important 必須）。箱には testid も安定クラスも
+//    無いので、目印として自前の class を付けて CSS を当てる。
+//  - クリックを拾わせる（重要）: 刷新後のカードは中身がまとめて pointer-events:none にされ、
+//    クリックはカード全体を覆うオーバーレイの <a> が受ける造りになった。そのままではボタンが
+//    ヒットテストに乗らず、押しても「チケットを開く」だけになる。`pointer-events:auto` を
+//    ボタンへ明示して復活させる（塗り順ではカード本体がオーバーレイより上なので z-index は不要）。
+//  - 表示: 既定 opacity:0。カードの :hover でのみ表示（キーボード focus でも）。
 //  - コピー: navigator.clipboard.writeText（secure context で可）。失敗時は textarea + execCommand。
 //    クリックはユーザージェスチャなので clipboard API のフォーカス要件を満たす。
-//  - 常駐: SPA 再描画でカード（＝キー）が再生成されても MutationObserver で貼り直す。多重付与は
-//    キー内の既存ボタン有無で防ぐ。
+//  - 常駐: SPA 再描画でカードが再生成されても MutationObserver で貼り直す。多重付与は
+//    箱の中の既存ボタン有無で防ぐ。
 JIRAPP.registerFeature("cardKeyCopy", function (app) {
   // カンバン DOM の安定 testid。
-  var T_KEY = "platform-card.common.ui.key.key";
-  var T_CARD = "software-board.board-container.board.card-container.card-with-icc";
+  var T_CARD = "board.content.cell.card";
+  // キーのリンク（同 href のオーバーレイと区別するため、テキストの有無で絞り込む）。
+  var KEY_LINK_SEL = 'a[href^="/browse/"]';
+  // キーの箱に付ける自前の目印。
+  var WRAP_CLASS = "__jirapp-keywrap";
 
   function sel(t) {
     return '[data-testid="' + t + '"]';
@@ -39,9 +53,9 @@ JIRAPP.registerFeature("cardKeyCopy", function (app) {
 
   app.addStyle(
     "__jirapp_card_copy_style__",
-    sel(T_KEY) + "{position:relative;overflow:visible !important;}\n" +
-    ".__jirapp-copybtn{position:absolute;left:100%;top:50%;transform:translateY(-50%);" +
-    "margin-left:2px;display:inline-flex;align-items:center;justify-content:center;" +
+    "." + WRAP_CLASS + "{overflow:visible !important;white-space:nowrap;}\n" +
+    ".__jirapp-copybtn{display:inline-flex;vertical-align:middle;pointer-events:auto;" +
+    "margin-left:4px;align-items:center;justify-content:center;" +
     "width:18px;height:18px;box-sizing:border-box;border:0;padding:0;background:transparent;" +
     "cursor:pointer;border-radius:3px;opacity:0;transition:opacity .1s;" +
     "color:var(--ds-text-subtle,#626f86);}\n" +
@@ -53,10 +67,22 @@ JIRAPP.registerFeature("cardKeyCopy", function (app) {
     ".__jirapp-copybtn svg{width:13px;height:13px;pointer-events:none;}"
   );
 
-  // キーの表示文字列。ボタンは <a> の外に append するので、リンク文字列だけを読む。
-  function keyText(key) {
-    var a = key.querySelector("a");
-    return ((a || key).textContent || "").trim();
+  function text(el) {
+    return el ? (el.textContent || "").trim() : "";
+  }
+
+  // カード内のキーのリンク。無ければ null。
+  // 表示文字列が href 末尾のキーと一致するものだけを採る。「テキストの有無」だけで選ぶと、
+  // オーバーレイ側に読み上げ用の非表示文言（"COM-123 …を読み込むには Enter キー…"）が入って
+  // いるときにそちらを掴み、カード全体の箱にレイアウト用の CSS を当ててしまう。
+  function keyLink(card) {
+    var links = card.querySelectorAll(KEY_LINK_SEL);
+    for (var i = 0; i < links.length; i++) {
+      var href = links[i].getAttribute("href") || "";
+      var key = href.slice(href.lastIndexOf("/") + 1);
+      if (key && text(links[i]) === key) return links[i];
+    }
+    return null;
   }
 
   function fallbackCopy(text) {
@@ -95,10 +121,13 @@ JIRAPP.registerFeature("cardKeyCopy", function (app) {
     }, 1200);
   }
 
-  function addButton(key) {
-    if (key.querySelector(".__jirapp-copybtn")) return;
-    var initial = keyText(key);
-    if (!initial) return;
+  function addButton(card) {
+    var link = keyLink(card);
+    if (!link) return;
+    var wrap = link.parentElement;
+    if (!wrap || wrap.querySelector(".__jirapp-copybtn")) return;
+    var initial = text(link);
+    wrap.classList.add(WRAP_CLASS);
     var btn = document.createElement("button");
     btn.type = "button";
     btn.className = "__jirapp-copybtn";
@@ -111,9 +140,9 @@ JIRAPP.registerFeature("cardKeyCopy", function (app) {
         ev.preventDefault();
         ev.stopPropagation();
         // カード再利用で文字列が変わりうるので、クリック時に最新のキーを読む。
-        var text = keyText(key);
-        if (!text) return;
-        Promise.resolve(copyText(text)).then(function () {
+        var key = text(keyLink(card));
+        if (!key) return;
+        Promise.resolve(copyText(key)).then(function () {
           flash(btn);
         });
       },
@@ -126,15 +155,15 @@ JIRAPP.registerFeature("cardKeyCopy", function (app) {
     btn.addEventListener("mousedown", function (ev) {
       ev.stopPropagation();
     }, true);
-    key.appendChild(btn);
+    wrap.appendChild(btn);
   }
 
   function addAll() {
-    var keys = document.querySelectorAll(sel(T_KEY));
-    for (var i = 0; i < keys.length; i++) addButton(keys[i]);
+    var cards = document.querySelectorAll(sel(T_CARD));
+    for (var i = 0; i < cards.length; i++) addButton(cards[i]);
   }
 
-  // 常駐監視: カード（＝キー）の追加・再描画があったときだけ貼り直す。
+  // 常駐監視: カードの追加・再描画があったときだけ貼り直す。
   var pending = false;
   function schedule() {
     if (pending) return;
@@ -150,7 +179,7 @@ JIRAPP.registerFeature("cardKeyCopy", function (app) {
       for (var j = 0; j < added.length; j++) {
         var node = added[j];
         if (!node || node.nodeType !== 1 || !node.matches) continue;
-        if (node.matches(sel(T_KEY)) || (node.querySelector && node.querySelector(sel(T_KEY)))) {
+        if (node.matches(sel(T_CARD)) || (node.querySelector && node.querySelector(sel(T_CARD)))) {
           schedule();
           return;
         }

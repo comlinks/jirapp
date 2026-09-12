@@ -17,6 +17,22 @@
 // 常駐させ、多重実行は登録ガードで防ぐこと。
 (function () {
   if (window.__JIRAPP_INSTALLED__) return;
+  // document-start 注入は子フレームでも走る。JIRAPP.store が native localStorage を得るために
+  // 作る about:blank の隠し iframe もその一つで、そこで機能を組み立てると store がまた iframe を
+  // 作り、際限なく入れ子になって RangeError: Maximum call stack size exceeded で落ちる
+  // （最上位の動作自体は catch されて続くが、リロードのたびに例外が積まれていた）。注入機能は
+  // どれも最上位の Jira 文書だけが対象なので、子フレームでは何もしない。ただし後続の
+  // inject/*.js は読み込み時に JIRAPP を呼ぶので、何もしないスタブだけは置いておく。
+  if (window.top !== window.self) {
+    var noop = function () {};
+    window.JIRAPP = {
+      registerFeature: noop,
+      addStyle: noop,
+      onConfig: noop,
+      store: { get: function (_key, fallback) { return fallback; }, set: noop }
+    };
+    return;
+  }
   window.__JIRAPP_INSTALLED__ = true;
 
   // 既定設定（Rust 側の __JIRAPP_APPLY__ 呼び出しで上書きされる）。

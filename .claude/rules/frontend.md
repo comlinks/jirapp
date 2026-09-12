@@ -24,11 +24,18 @@ paths:
 注入 JS は Rust の生文字列ではなく `src-tauri/src/inject/*.js` に置き、`inject.rs` が `include_str!` で取り込む（エディタ支援と lint が効く）。`inject.rs` の `DOC_START_SCRIPTS`（`&[&str]`）に並べた順で document-start にネイティブ注入する。
 
 - **基盤プラットフォーム**：`inject/machinery.js`（`DOC_START_SCRIPTS` の**先頭固定**）。アイドル検知・自動リロード・ユーザー CSS 適用の土台に加え、各機能が乗る `window.JIRAPP` を用意する。`registerFeature(name, fn)`（多重登録ガードと DOM 準備後の `fn(JIRAPP)` 実行）/ `store.get/set(key, ...)`（iframe 経由 native localStorage 永続化）/ `addStyle(id, css)`（id 付き `<style>`）/ `onConfig(cb)`（Rust からの設定購読）。
+- **子フレームでは動かない**：document-start 注入は子フレームでも走る。`store` が native localStorage 用に作る about:blank の隠し iframe もその一つで、そこで機能を組み立てると `store` がまた iframe を作り、際限なく入れ子になって落ちる。`machinery.js` は `window.top !== window.self` なら何もしないスタブだけ置いて抜ける。**注入機能は最上位の Jira 文書だけを対象にすること。**
 - **個別機能**：`column_color.js`（列ヘッダ着色, #21）、`card_key_copy.js`（キーのコピー, #22）、`reload_shortcut.js`（F5 リロード, #25）、`reload_button.js`（左下フローティングボタン, #26）。`JIRAPP.registerFeature("...", function (app) { ... })` の形で基盤に登録し、`app.store` / `app.addStyle` を共有利用する。DOM は `data-testid` で辿り、SPA 追従は各機能内の `MutationObserver` で行う。
-- **新しい JS 拡張機能の足し方**：`inject/<feature>.js` を作って `JIRAPP.registerFeature` で登録し、`inject.rs` の `DOC_START_SCRIPTS` に `include_str!` 定数を 1 行足すだけ。`jira.rs` は触らない。
+- **新しい JS 拡張機能の足し方**：`inject/<feature>.js` を作って `JIRAPP.registerFeature` で登録し、`inject.rs` の `DOC_START_SCRIPTS` へ `include_str!` 定数を 1 行足すだけ（`MACHINERY_JS` より後ならどこでもよい）。`jira.rs` は触らない。**機能のコードは必ず `registerFeature` のコールバック内に置くこと**。トップレベルで `JIRAPP` の他の API を呼ぶと、子フレーム用のスタブに無い API だったときにそこだけ静かに落ちる。
 - **ユーザー JS**：`inject::user_js_wrapper` で `try/catch` ラップし、基盤・各機能の後に注入する（構文エラーを基盤へ波及させない）。
 - **ユーザー CSS と設定値**：`inject::push_config_script` を `webview.eval` で流し込む。`on_page_load` の `Finished` 時と、保存時のライブ適用（`jira::apply`）で再注入される。page 側の `window.__JIRAPP_APPLY__` が CSS 適用とリロード再スケジュール、`onConfig` 通知を行う。
 - lint は Biome（`just lint-inject`）。設定は `biome.json` で `inject/*.js` に限定してある（formatter は off、lint のみ）。Biome の版は justfile の `biome_version` に一本化してあり、CI も同じレシピを呼ぶ。
+
+## Jira の DOM 変更への備え（#51）
+
+Jira Cloud はボードの実装ごと入れ替えることがある（2026-09 に `platform-board-kit.*` / `software-board.*` の testid が消え、`board.content.*` 系へ移った）。testid が消えると注入機能は黙って効かなくなる。
+
+- **実機 DOM の調べ方**：`WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222` を付けて `just dev` すると、WebView2 に CDP で繋いで Jira ページを調べられる（`Runtime.evaluate` で DOM を走査、`Input.dispatchMouseEvent` で実ホバー／実クリック、`Page.captureScreenshot` で見た目の確認）。合成イベントでは `:hover` が発火しないので、ホバーで現れる UI は実イベントで確かめること。
 
 ## SPA への追従
 

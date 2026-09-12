@@ -2,15 +2,22 @@
 // 列の ⋯（その他の操作）メニューに「色の変更」を追加する。基盤 machinery.js の
 // window.JIRAPP プラットフォームに登録し、store / addStyle を共有利用する。
 //
+// 対象 DOM は 2026-09 のボード刷新（issue #51）で入れ替わった。旧実装が拠り所にしていた
+// platform-board-kit.* / software-board.* の testid は消え、board.content.* 系になっている。
+//
 // 設計の要点（いずれも実機検証済み。詳細は開発メモ jira-column-color-dom 参照）:
-//  - 着色方式: 列ヘッダ既定のグレーは Jira 自身のインライン
-//    `background-color: var(--project-color-elevation-surface-sunken)`（非 important）。
-//    これを直接書き換えるとクリア時に透明化するため触らない。代わりに注入 <style> の
-//    `[data-jirapp-col="<hue>"]{...!important}` と header-container への `data-jirapp-col`
-//    属性で上書きする。`!important` は非 important インラインに勝つ。クリアは属性を外すだけで
-//    既定グレーが自動復帰する。
+//  - 着色方式: 刷新後の列ヘッダ自身は背景が透明で、グレーは列セル（board.content.cell）が
+//    持つ。ヘッダへ色を敷けばセルのグレーの上に載るので、セル側は触らない。注入 <style> の
+//    `[data-jirapp-col="<hue>"]{...}` と header への `data-jirapp-col` 属性で着色し、クリアは
+//    属性を外すだけで既定の見た目へ戻す。将来ヘッダ側に背景が復活しても勝てるよう
+//    `!important` は残す。
 //  - 列の識別: 位置（nth-child）は並べ替え・増減で崩れるため、安定した data-testid を辿り、
-//    ステータス名をキーにする。
+//    ステータス名をキーにする。列名の要素は件数バッジを含まないので textContent をそのまま使える。
+//  - ⋯ トリガ: 刷新後は testid が無い。ヘッダ内の `button[aria-haspopup="true"]` が
+//    ⋯（その他のアクション）で、aria-label は locale 依存なので使わない。
+//  - 列メニューの同定: トリガを押すと `aria-controls="ds--dropdown--…"` が付き、その id の
+//    要素の中に `[role="menu"]` が描画される。この対応で「今開いたのが押した列のメニューか」を
+//    locale にも testid にも依存せず判定でき、カード側の ⋯ メニューへの誤爆も防げる。
 //  - 永続化: JIRAPP.store（iframe 経由 native localStorage）に名前→hue マップを保存する。
 //    Jira ウィンドウは IPC を持たず設定ストアへは書けないため、この WebView 内保存を用いる。
 //  - 常駐: SPA 遷移や再描画で属性が失われても MutationObserver で貼り直す。マップはメモリに
@@ -26,12 +33,11 @@ JIRAPP.registerFeature("columnColor", function (app) {
   ];
 
   // カンバン DOM の安定 testid。
-  var T_WRAP = "platform-board-kit.ui.column.draggable-column.styled-wrapper";
-  var T_HDR = "platform-board-kit.common.ui.column-header.header.column-header-container";
-  var T_NAME = "platform-board-kit.common.ui.column-header.editable-title.column-title.column-name";
-  var T_TRIG = "software-board.board-container.board.column.header.menu.column-menu-trigger";
-  // 列メニュー（.atlaskit-portal）判定に使う既定項目 testid の接頭辞。
-  var MENU_ITEM_PREFIX = "software-board.board-container.board.column.header.menu.item-";
+  var T_CELL = "board.content.cell";
+  var T_HDR = "board.content.cell.column-header";
+  var T_NAME = "board.content.cell.column-header.name";
+  // ⋯ トリガ（testid が無いので aria 属性で拾う）。
+  var TRIG_SEL = 'button[aria-haspopup="true"]';
 
   function sel(t) {
     return '[data-testid="' + t + '"]';
@@ -51,33 +57,52 @@ JIRAPP.registerFeature("columnColor", function (app) {
   });
   app.addStyle("__jirapp_col_style__", css);
 
-  function columnName(wrap) {
-    var n = wrap.querySelector(sel(T_NAME));
+  function columnName(cell) {
+    var n = cell.querySelector(sel(T_NAME));
     return n ? (n.textContent || "").trim() : "";
   }
 
-  // 保存済みマップに従い、全列の header-container へ属性を反映する。
+  // 保存済みマップに従い、全列のヘッダへ属性を反映する。
   function applyAll() {
-    var wraps = document.querySelectorAll(sel(T_WRAP));
-    for (var i = 0; i < wraps.length; i++) {
-      var hdr = wraps[i].querySelector(sel(T_HDR));
+    var cells = document.querySelectorAll(sel(T_CELL));
+    for (var i = 0; i < cells.length; i++) {
+      var hdr = cells[i].querySelector(sel(T_HDR));
       if (!hdr) continue;
-      var hue = map[columnName(wraps[i])];
+      var hue = map[columnName(cells[i])];
       if (hue) hdr.setAttribute("data-jirapp-col", hue);
       else hdr.removeAttribute("data-jirapp-col");
     }
   }
 
-  // ⋯ をクリックした列を控える（メニューはポータルへ分離描画されるため、開いた瞬間に対象列を記録）。
-  var lastColName = "";
-  var lastTrigger = null;
+  // ⋯ のクリックを起点に、その列のメニューが描画されるのを待って項目を足す。
+  // メニューは空のコンテナが先に挿入され中身が後から入るため、MutationObserver では
+  // 「[role=menu] を含むノードの追加」を取り逃がす。押したトリガから辿るこの形なら確実で、
+  // 対象列（＝名前）とメニューの対応も取り違えない。
   document.addEventListener("click", function (ev) {
-    var t = ev.target && ev.target.closest ? ev.target.closest(sel(T_TRIG)) : null;
-    if (!t) return;
-    var wrap = t.closest(sel(T_WRAP));
-    lastColName = wrap ? columnName(wrap) : "";
-    lastTrigger = t;
+    var t = ev.target && ev.target.closest ? ev.target.closest(TRIG_SEL) : null;
+    if (!t || !t.closest(sel(T_HDR))) return;
+    var cell = t.closest(sel(T_CELL));
+    waitForMenu(t, cell ? columnName(cell) : "");
   }, true);
+
+  // 注入したら終わり、にはしない。メニューは段階的に描画されるので、1 件目を見た時点で足した
+  // 項目が後続のレンダリングで消えることがある。開いているあいだポーリングを続け、消えていれば
+  // 貼り直す（injectMenuItem は冪等）。
+  function waitForMenu(trigger, name) {
+    var tries = 0;
+    (function poll() {
+      if (tries++ > 40) return; // 約 2 秒で打ち切る（閉じる操作だったときもここで抜ける）
+      var id = trigger.getAttribute("aria-expanded") === "true"
+        ? trigger.getAttribute("aria-controls")
+        : null;
+      var dd = id ? document.getElementById(id) : null;
+      var menu = dd ? dd.querySelector('[role="menu"]') : null;
+      if (menu && menu.querySelector('[role="menuitem"]')) {
+        injectMenuItem(menu, trigger, name);
+      }
+      setTimeout(poll, 50);
+    })();
+  }
 
   // --- 自前パレットのポップアップ ---
   function closePalette() {
@@ -142,38 +167,29 @@ JIRAPP.registerFeature("columnColor", function (app) {
     }, 0);
   }
 
-  // --- 列メニュー（.atlaskit-portal）へ「色の変更」項目を注入 ---
-  function injectMenuItem(portal) {
-    if (!portal || portal.querySelector("[data-jirapp-menuitem]")) return;
-    var items = portal.querySelectorAll('[role="menuitem"]');
-    if (!items.length) return;
-    // 列メニューか（既定項目の testid 接頭辞を持つか）で判定する。誤爆防止。
-    var isColMenu = false;
-    var tmpl = items[0];
-    for (var i = 0; i < items.length; i++) {
-      var tid = items[i].getAttribute("data-testid") || "";
-      if (tid.indexOf(MENU_ITEM_PREFIX) === 0) {
-        isColMenu = true;
-        // 削除（危険色の可能性）以外を複製元にする。
-        if (tid.indexOf("item-delete") < 0) tmpl = items[i];
-      }
-    }
-    if (!isColMenu) return;
+  // --- 列メニューへ「色の変更」項目を注入 ---
+  // menu は押した ⋯ の aria-controls 配下から取ったものなので、カードの ⋯ など別メニューへの
+  // 誤爆は起きない。既定項目は 3 つとも同じクラスで、破壊的操作だけ見た目が違うといったことは
+  // ないため、複製元は先頭の項目でよい。
+  function injectMenuItem(menu, anchor, name) {
+    if (menu.querySelector("[data-jirapp-menuitem]")) return;
+    var tmpl = menu.querySelector('[role="menuitem"]');
+    if (!tmpl) return;
 
-    var name = lastColName;
-    var anchor = lastTrigger;
     var mi = tmpl.cloneNode(true); // クローンは React の fiber 外なので既定項目のハンドラは発火しない。
     mi.setAttribute("data-jirapp-menuitem", "1");
     mi.removeAttribute("data-testid");
+    // id を引き継ぐと DOM に同じ id が 2 つ並ぶ。Atlaskit のメニューはキーボード操作を
+    // aria-activedescendant ＋ id で行うので、複製側へ矢印キーで移ったときに参照がずれる。
+    mi.removeAttribute("id");
     // 表示ラベルだけ差し替える（アイコン等の構造は保つ）。
-    var walker = document.createTreeWalker(mi, NodeFilter.SHOW_TEXT, null);
-    var tn = walker.nextNode();
-    if (tn) tn.nodeValue = "色の変更";
+    var title = mi.querySelector("[data-item-title]");
+    if (title) title.textContent = "色の変更";
     else mi.textContent = "色の変更";
     mi.addEventListener("click", function (ev) {
       ev.preventDefault();
       ev.stopPropagation();
-      openPalette(anchor || mi, name);
+      openPalette(anchor, name);
       // Jira の列メニューを閉じる（パレットは body 直下の自前要素なので影響を受けない）。
       document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     }, true);
@@ -182,7 +198,6 @@ JIRAPP.registerFeature("columnColor", function (app) {
 
   // --- 常駐監視 ---
   // 着色は「列に関係する変化」があったときだけ貼り直す（無関係な SPA 変化で全列再走査しない）。
-  // メニュー注入はポータル追加を拾う（ポータルは概ね body 直下に mount される）。
   var applyPending = false;
   function scheduleApply() {
     if (applyPending) return;
@@ -198,14 +213,9 @@ JIRAPP.registerFeature("columnColor", function (app) {
       var added = muts[i].addedNodes;
       for (var j = 0; j < added.length; j++) {
         var node = added[j];
-        if (!node || node.nodeType !== 1) continue;
-        if (node.classList && node.classList.contains("atlaskit-portal")) {
-          injectMenuItem(node);
-          continue;
-        }
-        if (relevant || !node.matches) continue;
+        if (relevant || !node || node.nodeType !== 1 || !node.matches) continue;
         // 列そのもの、または列を内包するノードが追加されたときだけ再適用する。
-        if (node.matches(sel(T_WRAP)) || node.matches(sel(T_HDR)) || node.querySelector(sel(T_HDR))) {
+        if (node.matches(sel(T_CELL)) || node.matches(sel(T_HDR)) || node.querySelector(sel(T_HDR))) {
           relevant = true;
         }
       }

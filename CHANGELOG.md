@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Jira の画面刷新に追従 (#51)**：Jira Cloud がカンバンの実装を入れ替え、依存していた `data-testid` が `platform-board-kit.*` / `software-board.*` から `board.content.*` へ総入れ替えになったため、列ヘッダの着色（#21）とチケットキーのコピー（#22）がどちらも効かなくなっていた。新しい DOM に合わせて selector を引き直した。列の ⋯ とカードのキーは testid を失ったので、前者はヘッダ内の `button[aria-haspopup="true"]`、後者はカード内の `/browse/` リンクのうち表示文字列を持つものを目印にしている（aria-label は locale 依存なので使わない）。列メニューの同定は、⋯ に付く `aria-controls` の先を辿る形にした。あわせて、刷新後のカードは中身が `pointer-events:none` でオーバーレイのリンクにクリックを集約する造りになったため、コピーボタンに `pointer-events:auto` を明示している。
+- **子フレームで注入 JS が入れ子に増殖していた**：document-start 注入は子フレームでも走る。`JIRAPP.store` が native localStorage を得るために作る about:blank の隠し iframe もその一つで、そこで機能を組み立てると `store` がまた iframe を作り、際限なく入れ子になって `RangeError: Maximum call stack size exceeded` を投げていた。最上位の動作自体は例外を握り潰して続いていたが、リロードのたびに例外が積まれていた。`machinery.js` を最上位の文書でだけ動かすようにした。
+
 ### Internal
 
 - **タスクランナーに just を導入 (#44)**：開発タスクの入口が npm scripts・`--manifest-path` 付きの cargo・`npx biome` に分散し、CI が同じコマンドを別途書いていた。`justfile` を置いてレシピを唯一の入口にし（`dev` / `check` / `fmt` / `clippy` / `test` / `lint-inject` / `bump` ほか）、CI（`ci.yml` / `security.yml`）の各ステップもレシピ呼び出しに差し替えた。ステップ名は残してあるので失敗箇所の粒度は変わらない。レシピの実体は npm scripts や cargo に委ねた薄いファサードで、cargo 系は `working-directory` 属性で `--manifest-path` を不要にした。Biome の版は justfile の `biome_version` に一本化し、CI の `biomejs/setup-biome` は廃した。
@@ -18,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **CLAUDE.md を棚卸しして `.claude/rules/` に分割 (#43)**：領域別の実装ルールを `rust.md`（Rust とコマンド、`sysmenu`）/ `frontend.md`（Vue と注入 JS、自動リロード）/ `testing.md`（動作確認）に切り出し、`paths` frontmatter を付け、該当ファイルを読んだときだけ読み込まれるようにした。CLAUDE.md は 196 行から 159 行になり、101 行分が条件ロードに移った。残したのは領域をまたぐ設計と、外すと壊れる不変条件（単一 UDF、メインスレッドを塞がない、IPC 境界、実害の記録）。分割に `@import` は使わない。`.claude/rules/` は Claude Code が自動的に読むディレクトリだから。import 記法自体も、正しくは `@import <path>` ではなく `@<path>` と書く。
 - **CLAUDE.md の陳腐化を修正 (#43)**：`inject/reload_button.js`（#26）と `set_settings_height` コマンドが実装済みなのに記載から漏れていた。リポジトリ内の参照パスが実在することも機械的に検査した。
 - **`.claude/rules/` を追跡対象にした (#43)**：グローバル ignore が `.claude/` を除外していたため、リポジトリの `.gitignore` で打ち消した。`settings.local.json` は従来どおり除外する。
+- **依存更新**：Dependabot の更新 5 件（vue 3.5.42 / vite 8.2.2 / vue-tsc 3.3.11 / tauri-plugin-updater 2.11.0 / tauri-plugin-dialog 2.7.3。updater と dialog は Cargo 側と npm 側の両方）を取り込んだ。
 
 ## [0.9.1] - 2026-08-11
 
