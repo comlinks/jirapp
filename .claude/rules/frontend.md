@@ -25,7 +25,7 @@ paths:
 
 - **基盤プラットフォーム**：`inject/machinery.js`（`DOC_START_SCRIPTS` の**先頭固定**）。アイドル検知・自動リロード・ユーザー CSS 適用の土台に加え、各機能が乗る `window.JIRAPP` を用意する。`registerFeature(name, fn)`（多重登録ガードと DOM 準備後の `fn(JIRAPP)` 実行）/ `store.get/set(key, ...)`（iframe 経由 native localStorage 永続化）/ `addStyle(id, css)`（id 付き `<style>`）/ `onConfig(cb)`（Rust からの設定購読）/ `expectDom(label, gate, selectors)`（依存 DOM の申告）/ `sel(testid)`（`data-testid` セレクタ生成）/ `watchDom(fn, selectors)`（SPA 追従の常駐監視。`fn` を 50ms でまとめて呼ぶ）。
 - **子フレームでは動かない**：document-start 注入は子フレームでも走る。`store` が native localStorage 用に作る about:blank の隠し iframe もその一つで、そこで機能を組み立てると `store` がまた iframe を作り、際限なく入れ子になって落ちる。`machinery.js` は `window.top !== window.self` なら何もしないスタブだけ置いて抜ける。**注入機能は最上位の Jira 文書だけを対象にすること。**
-- **個別機能**：`column_color.js`（列ヘッダ着色, #21）、`card_key_copy.js`（キーのコピー, #22）、`reload_shortcut.js`（F5 リロード, #25）、`reload_button.js`（ヘッダ右上のリロードボタン, #26 / #53）、`selfcheck.js`（DOM 追従セルフチェック, #51）。`JIRAPP.registerFeature("...", function (app) { ... })` の形で基盤に登録し、`app.store` / `app.addStyle` / `app.sel` / `app.watchDom` を共有利用する。DOM は `data-testid` で辿り、SPA 追従は `app.watchDom` に任せる（`MutationObserver` を各機能で組まない）。**`fn` が全走査するなら `selectors` で必ず絞ること**。絞らないと無関係な SPA の変化のたびに全走査が走る。逆に、絞りようがなく `fn` 自体が安い場合（`reload_button.js` の位置直し）は省略してよい。
+- **個別機能**：`column_color.js`（列ヘッダ着色, #21）、`card_key_copy.js`（キーのコピー, #22）、`column_scrollbar.js`（列のスクロールバーを控えめに, #52）、`reload_shortcut.js`（F5 リロード, #25）、`reload_button.js`（ヘッダ右上のリロードボタン, #26 / #53）、`selfcheck.js`（DOM 追従セルフチェック, #51）。`JIRAPP.registerFeature("...", function (app) { ... })` の形で基盤に登録し、`app.store` / `app.addStyle` / `app.sel` / `app.watchDom` を共有利用する。DOM は `data-testid` で辿り、SPA 追従は `app.watchDom` に任せる（`MutationObserver` を各機能で組まない）。**`fn` が全走査するなら `selectors` で必ず絞ること**。絞らないと無関係な SPA の変化のたびに全走査が走る。逆に、絞りようがなく `fn` 自体が安い場合（`reload_button.js` の位置直し）は省略してよい。
 - **新しい JS 拡張機能の足し方**：`inject/<feature>.js` を作って `JIRAPP.registerFeature` で登録し、`inject.rs` の `DOC_START_SCRIPTS` へ `include_str!` 定数を 1 行足すだけ（`MACHINERY_JS` より後ならどこでもよい）。`jira.rs` は触らない。**機能のコードは必ず `registerFeature` のコールバック内に置くこと**。トップレベルで `JIRAPP` の他の API を呼ぶと、子フレーム用のスタブに無い API だったときにそこだけ静かに落ちる。
 - **ユーザー JS**：`inject::user_js_wrapper` で `try/catch` ラップし、基盤・各機能の後に注入する（構文エラーを基盤へ波及させない）。
 - **ユーザー CSS と設定値**：`inject::push_config_script` を `webview.eval` で流し込む。`on_page_load` の `Finished` 時と、保存時のライブ適用（`jira::apply`）で再注入される。page 側の `window.__JIRAPP_APPLY__` が CSS 適用とリロード再スケジュール、`onConfig` 通知を行う。
@@ -37,6 +37,7 @@ Jira Cloud はボードの実装ごと入れ替えることがある（2026-09 �
 
 - `gate` は「まだ描画されていない／対象外」を判別するセレクタ。`null` なら常に点検する。カードのように 0 件がありうるものは gate を付けて誤報を防ぐ。
 - **CI での定期チェックは見送っている**：ボードの DOM は認証後の SPA でしか得られず、CI から取るには Atlassian の認証情報を CI シークレットへ置くことになる（REST API のトークンでは画面の DOM は取れない）。加えて Atlassian の UI 変更はテナント単位の段階配信なので、別テナントで見張っても自分のテナントの変化は検知できない。
+- **スクロールバーの見た目は `:hover` では切り替わらない**：Chromium は `::-webkit-scrollbar-*` の指定を hover の状態変化では計算し直さない（標準プロパティ `scrollbar-color` を `:hover` で切り替える書き方も、計算値は変わるのに描画が追従しない）。属性の付け外しなら計算し直されるので、`column_scrollbar.js` は JS で `data-jirapp-sb` を付け外しして CSS をその属性で分岐させている。
 - **実機 DOM の調べ方**：`WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222` を付けて `just dev` すると、WebView2 に CDP で繋いで Jira ページを調べられる（`Runtime.evaluate` で DOM を走査、`Input.dispatchMouseEvent` で実ホバー／実クリック、`Page.captureScreenshot` で見た目の確認）。合成イベントでは `:hover` が発火しないので、ホバーで現れる UI は実イベントで確かめること。
 
 ## SPA への追従

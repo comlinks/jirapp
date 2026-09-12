@@ -23,6 +23,10 @@ const COLUMN_COLOR_JS: &str = include_str!("inject/column_color.js");
 /// チケットキーのコピー機能（issue #22）。カンバンカードのキー隣にコピーボタンを足す。
 const CARD_KEY_COPY_JS: &str = include_str!("inject/card_key_copy.js");
 
+/// 列のスクロールバーを控えめにする（issue #52）。細くし、その列にマウスが乗っているあいだ
+/// だけつまみを見せる。
+const COLUMN_SCROLLBAR_JS: &str = include_str!("inject/column_scrollbar.js");
+
 /// F5 リロード機能（issue #25）。ブラウザ系に揃えて F5 で location.reload() する。
 const RELOAD_SHORTCUT_JS: &str = include_str!("inject/reload_shortcut.js");
 
@@ -41,6 +45,7 @@ pub(crate) const DOC_START_SCRIPTS: &[&str] = &[
     MACHINERY_JS,
     COLUMN_COLOR_JS,
     CARD_KEY_COPY_JS,
+    COLUMN_SCROLLBAR_JS,
     RELOAD_SHORTCUT_JS,
     RELOAD_BUTTON_JS,
     SELFCHECK_JS,
