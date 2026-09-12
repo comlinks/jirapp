@@ -29,15 +29,21 @@ const RELOAD_SHORTCUT_JS: &str = include_str!("inject/reload_shortcut.js");
 /// 左下フローティングのリロードボタン（issue #26）。クリックで location.reload() する。
 const RELOAD_BUTTON_JS: &str = include_str!("inject/reload_button.js");
 
+/// 注入機能の DOM 追従セルフチェック（issue #51）。各機能が `expectDom` で申告したセレクタが
+/// 当たらなくなったら通知する。申告は点検のたびに読み直すので並び順に依存しないが、
+/// 読み手のために末尾へ置いてある。
+const SELFCHECK_JS: &str = include_str!("inject/selfcheck.js");
+
 /// document-start でネイティブ注入するスクリプト群（順序どおり登録される）。
 /// **先頭は必ず `MACHINERY_JS`**（他機能が乗る `window.JIRAPP` を先に用意する）。
-/// 機能追加時はここへ 1 行足すだけでよい。
+/// それ以降の順序に決まりは無く、機能追加時はここへ 1 行足すだけでよい。
 pub(crate) const DOC_START_SCRIPTS: &[&str] = &[
     MACHINERY_JS,
     COLUMN_COLOR_JS,
     CARD_KEY_COPY_JS,
     RELOAD_SHORTCUT_JS,
     RELOAD_BUTTON_JS,
+    SELFCHECK_JS,
 ];
 
 /// ユーザー JS をネイティブ注入用にラップする。構文エラーがあってもこの script 内に閉じ、

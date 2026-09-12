@@ -11,6 +11,7 @@
 //       JIRAPP.store.get/set(key, ...)   … native localStorage（iframe 経由）による永続化
 //       JIRAPP.addStyle(id, css)         … id 付き <style> の作成/更新
 //       JIRAPP.onConfig(cb)              … Rust から届く設定（customCss 等）の購読
+//       JIRAPP.expectDom(label, gate, m) … 依存している Jira 側 DOM の申告（selfcheck.js が点検）
 //
 // 注意（SPA）: initialization_script はフルナビゲーション時のみ再実行され、クライアント側の
 // ルート遷移では走らない。遷移に追従したい処理は各機能側で MutationObserver / setInterval で
@@ -22,13 +23,17 @@
   // 作り、際限なく入れ子になって RangeError: Maximum call stack size exceeded で落ちる
   // （最上位の動作自体は catch されて続くが、リロードのたびに例外が積まれていた）。注入機能は
   // どれも最上位の Jira 文書だけが対象なので、子フレームでは何もしない。ただし後続の
-  // inject/*.js は読み込み時に JIRAPP を呼ぶので、何もしないスタブだけは置いておく。
+  // inject/*.js は読み込み時に JIRAPP を呼ぶので、何もしないスタブだけは置いておく。機能の
+  // コードは `registerFeature` のコールバック内に置く決まりなので、子フレームで実際に呼ばれる
+  // のは `registerFeature` だけ。残りは、その決まりを破ったときに静かに落ちないための保険。
   if (window.top !== window.self) {
     var noop = function () {};
     window.JIRAPP = {
       registerFeature: noop,
       addStyle: noop,
       onConfig: noop,
+      expectDom: noop,
+      domExpectations: function () { return []; },
       store: { get: function (_key, fallback) { return fallback; }, set: noop }
     };
     return;
@@ -48,6 +53,7 @@
   // ============================================================
   var installed = {};       // 機能名 -> true（多重登録防止）
   var configListeners = []; // onConfig 購読者
+  var expectations = [];    // expectDom で申告された「依存している DOM」
 
   // --- native localStorage（about:blank iframe 経由）---
   // top の window.localStorage は Atlassian のライブラリがメモリシムに差し替えるため、
@@ -107,6 +113,20 @@
       try {
         cb(window.__JIRAPP_CONFIG__);
       } catch {}
+    },
+
+    // 機能が依存している Jira 側の DOM を申告する。selfcheck.js がまとめて点検し、
+    // Jira の画面刷新で当たらなくなったら知らせる（issue #51 の再発検知）。
+    //   label     … 機能の表示名
+    //   gate      … これが 1 件も無いなら「まだ描画されていない／対象外」とみなし点検しない
+    //                （null なら常に点検する）
+    //   selectors … 説明 -> セレクタ。gate を満たすのに 0 件なら追従切れとみなす。
+    //                Jira 側の要素だけでなく、機能が付けた目印を見てもよい（付いたかを直接見る）
+    expectDom: function (label, gate, selectors) {
+      expectations.push({ label: label, gate: gate, selectors: selectors });
+    },
+    domExpectations: function () {
+      return expectations;
     },
 
     // 機能を一度だけ登録し、DOM 準備後に fn(JIRAPP) を実行する。

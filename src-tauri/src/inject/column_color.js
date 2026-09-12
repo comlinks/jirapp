@@ -43,6 +43,15 @@ JIRAPP.registerFeature("columnColor", function (app) {
     return '[data-testid="' + t + '"]';
   }
 
+  // 依存 DOM の申告（selfcheck.js が点検する）。ボードには必ず列があるので gate は要らず、
+  // ここが 0 件になったら Jira 側の作りが変わったということ。
+  app.expectDom("列ヘッダの着色", null, {
+    列セル: sel(T_CELL),
+    列ヘッダ: sel(T_HDR),
+    列名: sel(T_NAME),
+    "列メニューの ⋯": sel(T_HDR) + " " + TRIG_SEL
+  });
+
   // 名前→hue マップはメモリに保持し、保存時のみ更新する（再適用ごとの読み直しを避ける）。
   var map = app.store.get(STORE_KEY, {}) || {};
   function save() {

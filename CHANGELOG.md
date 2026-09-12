@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Jira の画面刷新に追従 (#51)**：Jira Cloud がカンバンの実装を入れ替え、依存していた `data-testid` が `platform-board-kit.*` / `software-board.*` から `board.content.*` へ総入れ替えになったため、列ヘッダの着色（#21）とチケットキーのコピー（#22）がどちらも効かなくなっていた。新しい DOM に合わせて selector を引き直した。列の ⋯ とカードのキーは testid を失ったので、前者はヘッダ内の `button[aria-haspopup="true"]`、後者はカード内の `/browse/` リンクのうち表示文字列を持つものを目印にしている（aria-label は locale 依存なので使わない）。列メニューの同定は、⋯ に付く `aria-controls` の先を辿る形にした。あわせて、刷新後のカードは中身が `pointer-events:none` でオーバーレイのリンクにクリックを集約する造りになったため、コピーボタンに `pointer-events:auto` を明示している。
 - **子フレームで注入 JS が入れ子に増殖していた**：document-start 注入は子フレームでも走る。`JIRAPP.store` が native localStorage を得るために作る about:blank の隠し iframe もその一つで、そこで機能を組み立てると `store` がまた iframe を作り、際限なく入れ子になって `RangeError: Maximum call stack size exceeded` を投げていた。最上位の動作自体は例外を握り潰して続いていたが、リロードのたびに例外が積まれていた。`machinery.js` を最上位の文書でだけ動かすようにした。
 
+### Features
+
+- **注入機能の DOM 追従セルフチェック (#51)**：Jira の画面が変わって注入機能が効かなくなったとき、黙って壊れたままにならないようにした。各機能が `JIRAPP.expectDom` で依存 DOM を申告し、`inject/selfcheck.js` がボード画面で定期的に点検する。描画待ちの猶予を過ぎても当たらない selector があれば、画面隅に通知を出して `console.warn` に残す。カードのように 0 件がありうるものは gate selector で対象外を判別し、誤報を出さないようにしてある。CI での定期チェックは見送った。ボードの DOM は認証後の SPA でしか得られず、CI から取るには Atlassian の認証情報を CI シークレットに置くことになるうえ、Atlassian の UI 変更はテナント単位の段階配信なので別テナントで見張っても自分のテナントの変化を検知できないため。
+
 ### Internal
 
 - **タスクランナーに just を導入 (#44)**：開発タスクの入口が npm scripts・`--manifest-path` 付きの cargo・`npx biome` に分散し、CI が同じコマンドを別途書いていた。`justfile` を置いてレシピを唯一の入口にし（`dev` / `check` / `fmt` / `clippy` / `test` / `lint-inject` / `bump` ほか）、CI（`ci.yml` / `security.yml`）の各ステップもレシピ呼び出しに差し替えた。ステップ名は残してあるので失敗箇所の粒度は変わらない。レシピの実体は npm scripts や cargo に委ねた薄いファサードで、cargo 系は `working-directory` 属性で `--manifest-path` を不要にした。Biome の版は justfile の `biome_version` に一本化し、CI の `biomejs/setup-biome` は廃した。

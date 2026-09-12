@@ -41,6 +41,15 @@ JIRAPP.registerFeature("cardKeyCopy", function (app) {
     return '[data-testid="' + t + '"]';
   }
 
+  // 依存 DOM の申告（selfcheck.js が点検する）。カードが 1 枚も無いボードでは判定できないので、
+  // カードの存在を gate にする（カードの testid 自体が変わった場合は列側の申告で気づける）。
+  // 見るのは「キーのリンクがあるか」ではなく「ボタンが付いたか」＝この機能の結果そのもの。
+  // キー文字列が <a> の外へ出るような変更（＝#51 と同種）で keyLink が誰も拾えなくなった場合も
+  // ボタンが 0 個になるので、これ 1 つで足りる。
+  app.expectDom("チケットキーのコピー", sel(T_CARD), {
+    コピーボタン: ".__jirapp-copybtn"
+  });
+
   // アイコン（Atlassian のトークン色に追従。copy = 2枚重ねの矩形 / check = チェックマーク）。
   var COPY_SVG =
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
