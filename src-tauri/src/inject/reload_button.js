@@ -26,9 +26,7 @@ JIRAPP.registerFeature("reloadButton", function (app) {
   // 差し込み位置の目印（この項目の直前へ入れる）。
   var T_NOTIF = "atlassian-navigation--secondary-actions--notifications--menu-trigger";
 
-  function sel(t) {
-    return '[data-testid="' + t + '"]';
-  }
+  var sel = app.sel;
 
   // 円形の更新アイコン（viewBox は 24 のまま。表示サイズは CSS で 16px に縮めて隣に合わせる）。
   var RELOAD_SVG =
@@ -102,19 +100,9 @@ JIRAPP.registerFeature("reloadButton", function (app) {
     list.insertBefore(item || createItem(), anchor);
   }
 
-  // 常駐監視: React の再描画で取り除かれても差し直す。差し直しは自分自身の変化も呼び戻すが、
-  // ensureButton は位置を見て判断するので、そのときは早期脱出して空回りするだけで済む。
-  var pending = false;
-  function schedule() {
-    if (pending) return;
-    pending = true;
-    setTimeout(function () {
-      pending = false;
-      ensureButton();
-    }, 50);
-  }
-  var mo = new MutationObserver(schedule);
-
+  // 常駐監視: React の再描画で取り除かれても差し直す。位置がずれる原因は「他所のノードが
+  // 挿入されたこと」なので、追加ノードの種類では絞り込めない（＝selectors は渡さない）。
+  // その代わり ensureButton は早期脱出込みで安く、自分の差し直しが呼び戻す 1 パスもそこで抜ける。
   ensureButton();
-  mo.observe(document.body, { childList: true, subtree: true });
+  app.watchDom(ensureButton);
 });

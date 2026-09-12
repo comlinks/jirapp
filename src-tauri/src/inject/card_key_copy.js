@@ -37,9 +37,7 @@ JIRAPP.registerFeature("cardKeyCopy", function (app) {
   // キーの箱に付ける自前の目印。
   var WRAP_CLASS = "__jirapp-keywrap";
 
-  function sel(t) {
-    return '[data-testid="' + t + '"]';
-  }
+  var sel = app.sel;
 
   // 依存 DOM の申告（selfcheck.js が点検する）。カードが 1 枚も無いボードでは判定できないので、
   // カードの存在を gate にする（カードの testid 自体が変わった場合は列側の申告で気づける）。
@@ -172,30 +170,7 @@ JIRAPP.registerFeature("cardKeyCopy", function (app) {
     for (var i = 0; i < cards.length; i++) addButton(cards[i]);
   }
 
-  // 常駐監視: カードの追加・再描画があったときだけ貼り直す。
-  var pending = false;
-  function schedule() {
-    if (pending) return;
-    pending = true;
-    setTimeout(function () {
-      pending = false;
-      addAll();
-    }, 50);
-  }
-  var mo = new MutationObserver(function (muts) {
-    for (var i = 0; i < muts.length; i++) {
-      var added = muts[i].addedNodes;
-      for (var j = 0; j < added.length; j++) {
-        var node = added[j];
-        if (!node || node.nodeType !== 1 || !node.matches) continue;
-        if (node.matches(sel(T_CARD)) || (node.querySelector && node.querySelector(sel(T_CARD)))) {
-          schedule();
-          return;
-        }
-      }
-    }
-  });
-
+  // 常駐監視: addAll は全カードを走査するので、カードの追加・再描画があったときだけ呼ぶ。
   addAll();
-  mo.observe(document.body, { childList: true, subtree: true });
+  app.watchDom(addAll, [sel(T_CARD)]);
 });

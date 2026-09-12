@@ -39,9 +39,7 @@ JIRAPP.registerFeature("columnColor", function (app) {
   // ⋯ トリガ（testid が無いので aria 属性で拾う）。
   var TRIG_SEL = 'button[aria-haspopup="true"]';
 
-  function sel(t) {
-    return '[data-testid="' + t + '"]';
-  }
+  var sel = app.sel;
 
   // 依存 DOM の申告（selfcheck.js が点検する）。ボードには必ず列があるので gate は要らず、
   // ここが 0 件になったら Jira 側の作りが変わったということ。
@@ -206,32 +204,8 @@ JIRAPP.registerFeature("columnColor", function (app) {
   }
 
   // --- 常駐監視 ---
-  // 着色は「列に関係する変化」があったときだけ貼り直す（無関係な SPA 変化で全列再走査しない）。
-  var applyPending = false;
-  function scheduleApply() {
-    if (applyPending) return;
-    applyPending = true;
-    setTimeout(function () {
-      applyPending = false;
-      applyAll();
-    }, 50);
-  }
-  var mo = new MutationObserver(function (muts) {
-    var relevant = false;
-    for (var i = 0; i < muts.length; i++) {
-      var added = muts[i].addedNodes;
-      for (var j = 0; j < added.length; j++) {
-        var node = added[j];
-        if (relevant || !node || node.nodeType !== 1 || !node.matches) continue;
-        // 列そのもの、または列を内包するノードが追加されたときだけ再適用する。
-        if (node.matches(sel(T_CELL)) || node.matches(sel(T_HDR)) || node.querySelector(sel(T_HDR))) {
-          relevant = true;
-        }
-      }
-    }
-    if (relevant) scheduleApply();
-  });
-
+  // applyAll は全列を走査するので、「列に関係する変化」があったときだけ呼ぶよう絞る
+  // （無関係な SPA 変化で全列再走査しない）。
   applyAll();
-  mo.observe(document.body, { childList: true, subtree: true });
+  app.watchDom(applyAll, [sel(T_CELL), sel(T_HDR)]);
 });

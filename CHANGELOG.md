@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **コミット前チェックに code-review と simplify を追加 (#42)**：変更の規模ごとの段を CLAUDE.md に表で定めた。ある程度の規模なら `/code-review` → `simplify` → `just check`、軽微なら `simplify` → `just check`。バグ探索を先に、整理を後に置くのは、simplify がバグを探さないため。どちらもコードを書き換えるので動作確認より前に回す。
 - **CLAUDE.md を棚卸しして `.claude/rules/` に分割 (#43)**：領域別の実装ルールを `rust.md`（Rust とコマンド、`sysmenu`）/ `frontend.md`（Vue と注入 JS、自動リロード）/ `testing.md`（動作確認）に切り出し、`paths` frontmatter を付け、該当ファイルを読んだときだけ読み込まれるようにした。CLAUDE.md は 196 行から 159 行になり、101 行分が条件ロードに移った。残したのは領域をまたぐ設計と、外すと壊れる不変条件（単一 UDF、メインスレッドを塞がない、IPC 境界、実害の記録）。分割に `@import` は使わない。`.claude/rules/` は Claude Code が自動的に読むディレクトリだから。import 記法自体も、正しくは `@import <path>` ではなく `@<path>` と書く。
 - **CLAUDE.md の陳腐化を修正 (#43)**：`inject/reload_button.js`（#26）と `set_settings_height` コマンドが実装済みなのに記載から漏れていた。リポジトリ内の参照パスが実在することも機械的に検査した。
+- **注入 JS の定型を基盤へ寄せた**：`data-testid` のセレクタ生成と、SPA 再描画に追従するための「MutationObserver ＋ 50ms のまとめ」の 2 つが 3 つの機能ファイルに同じ形で並んでいた。`machinery.js` へ `JIRAPP.sel(testid)` と `JIRAPP.watchDom(fn, selectors)` として出し、3 ファイルとも差し替えた。`watchDom` は `selectors` を与えるとそれに当たるノードが追加されたときだけ `fn` を呼ぶので、全走査する機能が無関係な変化で回らずに済む。
 - **`.claude/rules/` を追跡対象にした (#43)**：グローバル ignore が `.claude/` を除外していたため、リポジトリの `.gitignore` で打ち消した。`settings.local.json` は従来どおり除外する。
 - **依存更新**：Dependabot の更新 5 件（vue 3.5.42 / vite 8.2.2 / vue-tsc 3.3.11 / tauri-plugin-updater 2.11.0 / tauri-plugin-dialog 2.7.3。updater と dialog は Cargo 側と npm 側の両方）を取り込んだ。
 

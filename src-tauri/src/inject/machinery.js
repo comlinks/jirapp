@@ -12,6 +12,8 @@
 //       JIRAPP.addStyle(id, css)         … id 付き <style> の作成/更新
 //       JIRAPP.onConfig(cb)              … Rust から届く設定（customCss 等）の購読
 //       JIRAPP.expectDom(label, gate, m) … 依存している Jira 側 DOM の申告（selfcheck.js が点検）
+//       JIRAPP.sel(testid)               … data-testid のセレクタ生成
+//       JIRAPP.watchDom(fn, selectors)   … SPA 再描画に追従するための常駐監視
 //
 // 注意（SPA）: initialization_script はフルナビゲーション時のみ再実行され、クライアント側の
 // ルート遷移では走らない。遷移に追従したい処理は各機能側で MutationObserver / setInterval で
@@ -34,6 +36,8 @@
       onConfig: noop,
       expectDom: noop,
       domExpectations: function () { return []; },
+      sel: function (testid) { return '[data-testid="' + testid + '"]'; },
+      watchDom: noop,
       store: { get: function (_key, fallback) { return fallback; }, set: noop }
     };
     return;
@@ -54,6 +58,7 @@
   var installed = {};       // 機能名 -> true（多重登録防止）
   var configListeners = []; // onConfig 購読者
   var expectations = [];    // expectDom で申告された「依存している DOM」
+  var DEBOUNCE_MS = 50;     // watchDom が DOM の変化をまとめる幅
 
   // --- native localStorage（about:blank iframe 経由）---
   // top の window.localStorage は Atlassian のライブラリがメモリシムに差し替えるため、
@@ -127,6 +132,45 @@
     },
     domExpectations: function () {
       return expectations;
+    },
+
+    // data-testid のセレクタを組む。Jira の DOM を辿る取っ掛かりは基本これ。
+    sel: function (testid) {
+      return '[data-testid="' + testid + '"]';
+    },
+
+    // SPA 再描画に追従するための常駐監視。fn を DOM の落ち着き（DEBOUNCE_MS）でまとめて呼ぶ。
+    // initialization_script はフルナビゲーションでしか再実行されないので、各機能はこれで
+    // 貼り直しを常駐させる（fn は何度呼ばれてもよい＝冪等に書くこと）。
+    //   selectors … 与えると、そのどれかに当たるノードが追加されたときだけ fn を呼ぶ。
+    //               fn が全走査するなら必ず絞ること。省略すると全変化で呼ばれる。
+    watchDom: function (fn, selectors) {
+      var pending = false;
+      function schedule() {
+        if (pending) return;
+        pending = true;
+        setTimeout(function () {
+          pending = false;
+          fn();
+        }, DEBOUNCE_MS);
+      }
+      var mo = new MutationObserver(!selectors ? schedule : function (muts) {
+        for (var i = 0; i < muts.length; i++) {
+          var added = muts[i].addedNodes;
+          for (var j = 0; j < added.length; j++) {
+            var node = added[j];
+            if (!node || node.nodeType !== 1 || !node.matches) continue;
+            for (var k = 0; k < selectors.length; k++) {
+              if (node.matches(selectors[k]) || node.querySelector(selectors[k])) {
+                schedule();
+                return;
+              }
+            }
+          }
+        }
+      });
+      mo.observe(document.body, { childList: true, subtree: true });
+      return mo;
     },
 
     // 機能を一度だけ登録し、DOM 準備後に fn(JIRAPP) を実行する。
