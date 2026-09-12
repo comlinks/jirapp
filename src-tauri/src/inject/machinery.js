@@ -13,6 +13,7 @@
 //       JIRAPP.onConfig(cb)              … Rust から届く設定（customCss 等）の購読
 //       JIRAPP.expectDom(label, gate, m) … 依存している Jira 側 DOM の申告（selfcheck.js が点検）
 //       JIRAPP.sel(testid)               … data-testid のセレクタ生成
+//       JIRAPP.onBoard()                 … 今ボード本体を開いているか
 //       JIRAPP.watchDom(fn, selectors)   … SPA 再描画に追従するための常駐監視
 //
 // 注意（SPA）: initialization_script はフルナビゲーション時のみ再実行され、クライアント側の
@@ -37,6 +38,7 @@
       expectDom: noop,
       domExpectations: function () { return []; },
       sel: function (testid) { return '[data-testid="' + testid + '"]'; },
+      onBoard: function () { return false; },
       watchDom: noop,
       store: { get: function (_key, fallback) { return fallback; }, set: noop }
     };
@@ -59,6 +61,7 @@
   var configListeners = []; // onConfig 購読者
   var expectations = [];    // expectDom で申告された「依存している DOM」
   var DEBOUNCE_MS = 50;     // watchDom が DOM の変化をまとめる幅
+  var BOARD_PATH = /\/boards\/[^/]+(\/board)?\/?$/; // onBoard の判定（ボード本体だけを真とする）
 
   // --- native localStorage（about:blank iframe 経由）---
   // top の window.localStorage は Atlassian のライブラリがメモリシムに差し替えるため、
@@ -137,6 +140,13 @@
     // data-testid のセレクタを組む。Jira の DOM を辿る取っ掛かりは基本これ。
     sel: function (testid) {
       return '[data-testid="' + testid + '"]';
+    },
+
+    // 今ボード本体を開いているか。`/boards/<id>` の配下には backlog や timeline といった
+    // 列を持たない画面がぶら下がっているので、`/boards/` を含むかでは判定できない。
+    // カンバン前提の機能は、これで安く足切りしてから DOM を辿ること。
+    onBoard: function () {
+      return BOARD_PATH.test(location.pathname);
     },
 
     // SPA 再描画に追従するための常駐監視。fn を DOM の落ち着き（DEBOUNCE_MS）でまとめて呼ぶ。

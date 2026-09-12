@@ -57,6 +57,9 @@ JIRAPP.registerFeature("columnScrollbar", function (app) {
   }
 
   document.addEventListener("mouseover", function (ev) {
+    // mouseover は高頻度で、しかもこのリスナは SPA 遷移後も生き続ける。列が無い画面で
+    // closest を最後まで歩かせても無駄なので、先に URL で足切りする。
+    if (!app.onBoard()) return;
     var target = ev.target;
     if (!target || !target.closest) return;
     // mouseover は要素をまたぐたびに上がってくる。同じ列の中を動いていて、かつ目印が

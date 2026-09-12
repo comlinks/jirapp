@@ -12,9 +12,10 @@
 //
 // 設計の要点:
 //  - 誤報を出さないことを優先する。仕掛けは 3 つ。
-//     (1) ボード**本体**の URL のときだけ点検する。`/boards/<id>` の配下には backlog や
-//         timeline といった列を持たない画面がぶら下がっており、`/boards/` を含むかで
-//         判定すると、そちらを開いているあいだ列の申告が全滅して誤報になる。
+//     (1) ボード**本体**の URL のときだけ点検する（`JIRAPP.onBoard`）。`/boards/<id>` の
+//         配下には backlog や timeline といった列を持たない画面がぶら下がっており、
+//         `/boards/` を含むかで判定すると、そちらを開いているあいだ列の申告が全滅して
+//         誤報になる。
 //     (2) 描画が終わるだけの猶予（GRACE_MS）を置いてから判定を始める。
 //     (3) 猶予後も、連続 STRIKES 回欠けたときだけ通知する。1 回のスナップショットで確定すると、
 //         列のドラッグ中の一瞬の入れ替わりや描画の遅れを恒久的な誤報にしてしまう。
@@ -27,11 +28,6 @@ JIRAPP.registerFeature("selfCheck", function (app) {
   var STRIKES = 10; // 連続でこの回数欠けたら追従切れとみなす
   var BANNER_ID = "__jirapp-selfcheck";
 
-  // ボード本体だけを真とする（配下の backlog / timeline などは対象外）。
-  var BOARD_PATH = /\/boards\/[^/]+(\/board)?\/?$/;
-  function onBoard() {
-    return BOARD_PATH.test(location.pathname);
-  }
 
   // 追従できていない機能の一覧を「機能名（欠けた要素・...）」の形で返す。
   function missing() {
@@ -89,7 +85,7 @@ JIRAPP.registerFeature("selfCheck", function (app) {
   var boardSince = 0;
   var strikes = 0;
   var timer = setInterval(function () {
-    if (!onBoard()) {
+    if (!app.onBoard()) {
       boardSince = 0;
       strikes = 0;
       return;
