@@ -7,6 +7,11 @@
 [![Rust](https://img.shields.io/badge/Rust-2021-DEA584?logo=rust&logoColor=white)](https://www.rust-lang.org)
 [![Platform: Windows](https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows&logoColor=white)](#)
 
+> [!IMPORTANT]
+> **メンテナンスを終了しました。** 同等の機能は [pike](https://github.com/kan/pike) に
+> 組み込まれたので、今後はそちらを使ってください。このリポジトリはアーカイブ済みで、
+> 更新はありません。配布済みの v0.10.0 はこのまま動き、自動更新は「更新なし」になります。
+
 Jira 専用ブラウザ（Site-Specific Browser）。Jira Cloud（`*.atlassian.net`）を
 システムブラウザから独立したセッションで表示し、任意の JS/CSS 注入と
 アイドル時の自動リロードを行う Windows 向け Tauri v2 アプリ。
